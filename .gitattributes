@@ -1,0 +1,19 @@
+# Keep PowerShell and batch files as CRLF on checkout - a .cmd saved as LF breaks goto labels on
+# cmd.exe - while keeping everything else LF so diffs stay readable.
+* text=auto eol=lf
+
+*.ps1   text eol=crlf
+*.psm1  text eol=crlf
+*.cmd   text eol=crlf
+*.bat   text eol=crlf
+*.md    text eol=lf
+*.json  text eol=lf
+*.yml   text eol=lf
+*.py    text eol=lf
+*.csv   text eol=lf
+
+# Binary
+*.png   binary
+*.exe   binary
+*.dll   binary
+*.zip   binary

@@ -1,8 +1,12 @@
-# Local-LLM Python stack for Intel Core Ultra 7 255HX + Intel iGPU (no discrete GPU)
-# Install with:  uv pip install --python C:\Users\fih\llm\venv\Scripts\python.exe -r requirements.txt
+# Python extras for this stack. The models themselves run in llama.cpp, which needs none of this -
+# this file is for the scripts that came from the exploration: the Anthropic shim, the OpenVINO
+# experiments, and the notebook-style tooling.
 #
-# torch must come from the CPU index first, otherwise pip tries to pull CUDA wheels:
-#   uv pip install --python ... --index-url https://download.pytorch.org/whl/cpu torch torchvision torchaudio
+# Install with:
+#   python -m venv venv ; .\venv\Scripts\Activate.ps1
+#   pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision torchaudio
+#   pip install -r requirements.txt
+#
 
 # --- transformers / HF ---
 transformers>=5.0
@@ -16,6 +20,8 @@ peft
 trl
 huggingface_hub[hf_transfer]
 hf_transfer
+# xet is what makes a Hugging Face download parallel; bin\llm-fetch.ps1 says when it is absent
+hf_xet
 jinja2
 numpy
 scipy

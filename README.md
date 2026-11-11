@@ -1,11 +1,105 @@
-# Local LLM stack — Core Ultra 7 255HX + RTX 5060 Laptop + Xe iGPU
+# 40B models on an 8 GB laptop GPU
 
-> **Rewritten 2026-11-10 after a re-scan found the discrete GPU.**
-> The first version of this file claimed "no VRAM, the CPU is the workhorse, the iGPU is
-> useless for generation". That conclusion was built on an incomplete scan: at the time the
-> RTX 5060 was **powered down** and Windows only reported the Intel iGPU. Everything in
-> section 4 about the CPU path is still correct and still measured; sections 2, 3, 5 and 6
-> are the correction.
+![The launcher: six models, one at a time, with the download button and a live log pane](docs/img/launcher.png)
+
+A local-inference stack for one exact machine - Core Ultra 7 255HX, 32 GB DDR5-5600, RTX 5060 Laptop
+with 8 GB - where every flag was measured instead of guessed, and the guesses that turned out wrong
+are still in this file with a note saying so.
+
+Two claims worth the click: a **35B mixture-of-experts model at 34 t/s**, and a **4B model at 74 t/s
+with a 131072-token context**, both on the same 8 GB card, one at a time.
+
+## At a glance
+
+| model | size | speed | context | tool calls | what it is for |
+|---|--:|--:|--:|---|---|
+| **Gemma 4 E4B** QAT UD-Q4_K_XL | 4.2 GB | **74.1 t/s** | 131072 | yes | the default: fast, huge context, drives agents |
+| **Qwen3.6 35B-A3B** MoE UD-Q4_K_S | 21.7 GB | 34.0 t/s | 20480 | yes | strongest answers that still fit |
+| **flint 40B** NVFP4 MoE | 22.9 GB | 29.8 t/s | 49152 | yes | longest context on a big model |
+| **gpt-oss 20B** MXFP4 | 13.8 GB | 30.8 t/s | 24576 | no | chat only |
+| **Qwen3 8B** Q4_K_M | 5.2 GB | 59.0 t/s | 16384 | yes | small and quick, thinks first |
+| **Qwen2.5 Coder 7B** Q4_K_M | 4.7 GB | 50.3 t/s | 32768 | no | code, not agents |
+
+Every context number is the **largest one that completed a real 200-token request** on this machine.
+`/health` answering is not proof: one model reports healthy at 24576 and then fails its first
+completion. The method, including what had to be thrown away, is in
+[docs/how-the-numbers-were-made.md](docs/how-the-numbers-were-made.md).
+
+## Run it
+
+```powershell
+git clone https://github.com/zaxsh/local-llm-stack ; cd local-llm-stack
+.\get-started.ps1
+```
+
+That checks the machine, downloads the pinned llama.cpp build (~715 MB) and whichever models are
+missing (~75 GB, resumable), builds `Desktop\llama.cpp`, and opens the launcher. It skips whatever is
+already done, so it is also how you rebuild after changing a preset.
+
+You supply: Windows 10/11, an NVIDIA GPU (8 GB+ for the two big ones),
+[PowerShell 7](https://aka.ms/powershell), and `pip install -U "huggingface_hub[cli,hf_xet]"`.
+
+Prefer to drive it by hand?
+
+```powershell
+.\bin\llm-fetch.ps1 -List        # what is on disk, what is missing, where each file comes from
+.\bin\llm-fetch.ps1 -Missing     # download the rest from Hugging Face
+.\bin\llm-up.ps1 gemma4          # serve one model on http://127.0.0.1:8083/v1
+.\bin\llm-selftest.ps1           # scripts parse, catalogue agrees, presets agree, launcher builds
+```
+
+## Why it is fast on this machine
+
+1. **Tokens per second is bandwidth divided by bytes read per token.** GDDR7 moves ~448 GB/s, DDR5
+   ~47 GB/s. That 9.5x gap decides everything else, and it is why quantisation is not the first
+   lever - memory placement is.
+2. **MoE plus `--n-cpu-moe` is the only way to run 20-40B in 8 GB.** A sparse model reads a few
+   experts per token, so the experts that do not fit are fine in DDR5: `flint` streams roughly 84 %
+   of its parameters from RAM and still does 30 t/s.
+3. **f16 KV cache beats q8_0 by 25-35 % here** - the opposite of the usual "quantise the cache to
+   save memory" advice, and worth 3 GB of contexts.
+4. **The fast GPU shipped switched off on this laptop.** The first pass of this project ran on the
+   Intel iGPU, concluded the machine had no VRAM, and optimised the wrong thing. Section 2 is what
+   correcting that looked like.
+
+## What is in here
+
+| path | what |
+|---|---|
+| `get-started.ps1` | clone to running model, in one command |
+| `bin\` | 25 scripts: registry, fetcher, bundle builder, launcher builder, benchmarks, self-test, agent connectors |
+| `models.manifest.json` | the catalogue: repo, file, exact size, sha256 per model |
+| `presets\` | the tuned flags for all six models, readable without running anything |
+| `launchers\` | the Desktop shortcuts |
+| `docs\` | the results, the method, the project state, the client wiring guide |
+| `bench\` | the CSVs the numbers came from |
+| `.github\workflows\ci.yml` | parses every script, checks the catalogue, compiles the launcher |
+
+The engine and the weights are **not** in the repository: `get-started.ps1` fetches the build,
+`models.manifest.json` + `bin\llm-fetch.ps1` fetch the models. Code is MIT;
+the weights keep their own licences and are redistributed by nobody.
+
+## Contents
+
+1. [Machine profile (scanned)](#1-machine-profile-scanned)
+2. [The finding: the fastest GPU on this laptop is switched off](#2-the-finding-the-fastest-gpu-on-this-laptop-is-switched-off)
+3. [Memory budget: what actually fits in 8 GB](#3-memory-budget-what-actually-fits-in-8-gb)
+4. [Measured performance](#4-measured-performance)
+5. ["Mac-level" — what that actually means here](#5-mac-level--what-that-actually-means-here)
+6. [What changed in this pass](#6-what-changed-in-this-pass)
+7. [Layout and quickstart](#7-layout-and-quickstart)
+8. [Tuning that matters on this specific machine](#8-tuning-that-matters-on-this-specific-machine)
+9. [Known quirks, found the hard way](#9-known-quirks-found-the-hard-way)
+10. [Next steps, in value order](#10-next-steps-in-value-order)
+11. [Driving these models from an agent](#11-driving-these-models-from-an-agent)
+12. [Connecting any model to any client](#12-connecting-any-model-to-any-client)
+13. [The Desktop bundle](#13-the-desktop-bundle)
+14. [Context windows: the ceiling, per model](#14-context-windows-the-ceiling-per-model)
+15. [Getting the models back](#15-getting-the-models-back)
+
+> A note on this document: sections 1-15 are the working notebook, kept in the order it was written,
+> including the parts that were later corrected. If you only want the conclusions, the front of this
+> file and the two tables are enough.
 
 ---
 
@@ -341,6 +435,9 @@ and it is worth more than everything else in this file combined.**
 
 ```
 C:\Users\fih\llm\
+├─ get-started.ps1  clone to a running model, one command
+├─ LICENSE          MIT for the code; the weights keep their own
+├─ SECURITY.md      what leaves the machine (Hugging Face, only when asked)
 ├─ llama.cpp\b12255\
 │  ├─ cpu\         AVX-VNNI CPU build            <- on PATH as llama-server
 │  ├─ cuda\        CUDA 13.5 build (RTX 5060)    <- used by -Backend auto once the GPU is on
@@ -350,7 +447,7 @@ C:\Users\fih\llm\
 ├─ venv\           Python 3.12 LLM env
 ├─ bin\            llm-up · llm-fetch · llm-direct · llm-desktop · llm-claude · llm-server ·
 │                  llm-plan · llm-tune · llm-gpu · llm-bench · llm-check · llm-ctxgrow ·
-│                  llm-verify-bundle · serve-model · connect-* · anthropic-shim.py
+│                  llm-verify-bundle · llm-selftest · serve-model · connect-* · shim
 ├─ models.manifest.json   the catalogue: repo, file, size, sha256 per model
 ├─ presets\        generated .cmd per model (the tuned flags, readable)
 ├─ launchers\      the Desktop .cmd shortcuts, %USERPROFILE%-relative
@@ -581,14 +678,16 @@ steals is worth more than the tokens it saves. The full sweep is in
 `bin\llm-desktop.ps1` builds a self-contained `Desktop\llama.cpp`:
 
 ```powershell
-cd C:\Users\fih\llm\bin
-.\llm-desktop.ps1                  # first build (~744 MB of engine, 0 bytes of models)
-.\llm-desktop.ps1 -SkipBinaries    # refresh only the presets and hard links
+cd C:\Users\fih\llm
+.\bin\llm-desktop.ps1                  # first build (~744 MB of engine, 0 bytes of models)
+.\bin\llm-desktop.ps1 -SkipBinaries    # refresh only the presets, hard links and fetch\
 ```
 
 It copies the CUDA build, **hard-links** every model into its `models\` folder (same bytes, no
 second copy on disk), and writes one double-clickable preset per model with the flags measured in
-this document. `START HERE.cmd` is a menu; each preset starts `llama-server` and opens the built-in
+this document. It also drops in `fetch\` - `llm-fetch.ps1` plus `models.manifest.json` - which
+is what the launcher's Download button runs, so the folder keeps working after it is copied
+elsewhere. `START HERE.cmd` is a menu; each preset starts `llama-server` and opens the built-in
 web UI at `http://127.0.0.1:<port>`.
 
 The presets read their ports, aliases, context sizes and `-n-cpu-moe` values from the registry in
@@ -597,8 +696,9 @@ regenerates them.
 
 ### `llama-direct.exe`
 
-`bin\llm-direct.ps1` compiles a 16 KB WinForms window (with the .NET Framework `csc.exe` that ships
-with Windows) and drops it in the bundle and on the Desktop:
+`bin\llm-direct.ps1` compiles a 26 KB WinForms window (with the .NET Framework `csc.exe` that
+ships with Windows) and drops it in the bundle and on the Desktop. The model list, the download
+sources and the measured flags are compiled into it, so it needs nothing else to run:
 
 ```powershell
 .\llm-direct.ps1

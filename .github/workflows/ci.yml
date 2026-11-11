@@ -1,0 +1,51 @@
+name: ci
+
+# No GPU and no model files are needed for any of this: it parses every script, checks that the
+# registry, the catalogue and the presets still describe the same six models, and compiles the
+# launcher with the .NET Framework compiler that ships with Windows.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  selftest:
+    name: scripts, catalogue, launcher
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Which PowerShell
+        shell: pwsh
+        run: $PSVersionTable.PSVersion.ToString()
+
+      - name: self-test
+        shell: pwsh
+        run: ./bin/llm-selftest.ps1
+
+      - name: build the launcher into dist
+        shell: pwsh
+        run: |
+          ./bin/llm-direct.ps1 -Bundle ./dist -DesktopCopy ./dist/llama-direct-desktop-copy.exe
+
+      - name: the launcher answers --list
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'list.txt'
+          $p = Start-Process ./dist/llama-direct.exe -ArgumentList '--list' -Wait -PassThru -NoNewWindow `
+               -RedirectStandardOutput $out -RedirectStandardError (Join-Path $env:RUNNER_TEMP 'list.err')
+          Get-Content $out
+          if ($p.ExitCode -ne 0) { throw "llama-direct.exe --list exited $($p.ExitCode)" }
+          if (-not (Get-Content $out)) { throw "--list printed nothing" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: llama-direct
+          path: dist/llama-direct.exe
+          if-no-files-found: error

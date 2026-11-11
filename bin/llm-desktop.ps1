@@ -24,12 +24,26 @@
 param(
     [string]$Destination = "$env:USERPROFILE\Desktop\llama.cpp",
     [switch]$SkipBinaries,
-    [string]$Build = 'C:\Users\fih\llm\llama.cpp\b12255\cuda',
-    [string]$SourceModels = 'C:\Users\fih\llm\models'
+    # left empty so the defaults follow the repository instead of one machine's layout
+    [string]$Build,
+    [string]$SourceModels
 )
 
 $ErrorActionPreference = 'Stop'
 $bin = $PSScriptRoot
+$repo = Split-Path $bin -Parent
+
+# Defaults are relative to this repository, so a clone in any folder works. Override -Build to use
+# a different llama.cpp build (cpu / vulkan / openvino) or -SourceModels to read GGUFs from elsewhere.
+if (-not $Build) {
+    foreach ($cand in @((Join-Path $repo 'llama.cpp\b12255\cuda'),
+                        (Join-Path $repo 'llama.cpp\b12255\vulkan'),
+                        (Join-Path $repo 'llama.cpp\b12255\cpu'))) {
+        if (Test-Path (Join-Path $cand 'llama-server.exe')) { $Build = $cand; break }
+    }
+    if (-not $Build) { $Build = Join-Path $repo 'llama.cpp\b12255\cuda' }
+}
+if (-not $SourceModels) { $SourceModels = Join-Path $repo 'models' }
 
 Write-Host ""
 Write-Host "  building $Destination" -ForegroundColor Cyan
