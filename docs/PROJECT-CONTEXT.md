@@ -211,7 +211,7 @@ at 24576 loads, answers `/health`, and then fails its first real completion.
 
 ## 9. Where this lives now — GitHub, and getting the models back (2026‑11‑11 21:35)
 
-**Repo:** `https://github.com/zaxsh/local-llm-stack` — **public**, branch `main`, tag `v1.0.0`,
+**Repo:** `https://github.com/zaxsh/local-llm-stack` — **public**, branch `main`, tags `v1.0.0` and `v1.0.1`,
 first release published with two assets.
 
 ```
@@ -269,6 +269,24 @@ Same 94 MB file, back to back, both runs surviving a dropped connection:
 2.4×. The absolute numbers are the line's, not xet's. `-HighPerformance` sets
 `HF_XET_HIGH_PERFORMANCE=1` for more parallel ranges.
 
+### The front door (added for v1.0.1)
+
+`get-started.ps1` is now the entry point: machine check, engine download (pinned `b12255`, from
+ggml-org releases — engine + cudart, ~715 MB), missing models, bundle, launcher, open. It is
+idempotent, so it is also the rebuild path.
+
+`bin\llm-selftest.ps1` is the regression net, and it needs no GPU and no model: it parses all 25
+scripts, proves the registry and the catalogue name the same six files, proves every preset uses the
+registered model/port/context, compiles the launcher and checks `--list`. CI runs exactly this on
+`windows-latest` (`.github/workflows/ci.yml`), then uploads the exe as an artifact. First run:
+all 7 steps green. **Run it before any commit that touches the registry, the manifest or the presets.**
+
+Portability that used to be machine-specific: `llm-desktop.ps1` now finds `-Build` and
+`-SourceModels` relative to the repo (cuda → vulkan → cpu), and `launchers\*.cmd` use `%USERPROFILE%`.
+
+Git gotcha worth keeping: `git archive` applies `.gitattributes`, which is why the `.cmd` files in
+the released zip are CRLF (cmd.exe breaks its `goto` labels on LF). If a batch file misbehaves after
+a checkout, check its line endings first.
 ### Re-cutting a release
 
 ```powershell
