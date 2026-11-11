@@ -22,7 +22,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$modelsDir = 'C:\Users\fih\llm\models'
+$modelsDir = (Join-Path (Split-Path $PSScriptRoot -Parent) 'models')
 
 # name -> file, port, alias, and the flags that were actually measured to be best.
 # Update this table (not the routes) when a model is replaced.

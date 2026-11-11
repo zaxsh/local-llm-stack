@@ -321,7 +321,7 @@ one that loads; one lower and the model fails with `failed to create_context`.
 | `stop.cmd` | kill the server, free VRAM |
 | `llama-server.exe`, `*.dll` | the engine (CUDA build, b12255) |
 
-The files in `models\` are the same bytes as `C:\Users\fih\llm\models\` - two names, one copy. If
+The files in `models\` are the same bytes as the repository's `models\` - two names, one copy. If
 you delete one side the data survives; delete both and it is gone.
 
 ## Command line, if you want it
@@ -332,7 +332,7 @@ llama-server.exe -m models\gemma-4-E4B-it-q4kxl.gguf --alias gemma-4-e4b ^
 ```
 
 Then any OpenAI-compatible client can use `http://127.0.0.1:8083/v1` with model id `gemma-4-e4b`.
-`C:\Users\fih\Desktop\connecting-local-models.md` explains how to point Claude Code, dsh-tui,
+`connecting-local-models.md`, copied to the Desktop, explains how to point Claude Code, dsh-tui,
 Cline, Continue and the rest at it.
 
 ## Which one to use
@@ -352,7 +352,7 @@ machine - not an estimate. See `Desktop\local-llm-report.md` for the table and
 ---
 
 *Built from llama.cpp b12255 (CUDA 13.5) on MSI-Crosshair, Windows 11 build 28000, RTX 5060 Laptop
-8 GB. Regenerate this folder with `C:\Users\fih\llm\bin\llm-desktop.ps1`.*
+8 GB. Regenerate this folder with `bin\llm-desktop.ps1`.*
 '@
 $readme = $readmeTemplate.Replace('{{TABLE}}', ($tbl -join "`n"))
 Set-Content -Path (Join-Path $Destination 'README.md') -Value $readme

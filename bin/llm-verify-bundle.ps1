@@ -14,7 +14,7 @@
 param(
     [string]$Bundle = "$env:USERPROFILE\Desktop\llama.cpp",
     [int]$MaxTokens = 300,
-    [string]$Out = 'C:\Users\fih\llm\bench\bundle-verify.csv'
+    [string]$Out = (Join-Path (Split-Path $PSScriptRoot -Parent) 'bench\bundle-verify.csv')
 )
 
 $ErrorActionPreference = 'Continue'

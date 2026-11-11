@@ -25,7 +25,7 @@ else { $modelList = @($Models) }
 
 $ErrorActionPreference = 'Continue'
 $bin = $PSScriptRoot
-$modelNamesDir = 'C:\Users\fih\llm\models'
+$modelNamesDir = (Join-Path (Split-Path $PSScriptRoot -Parent) 'models')
 
 $samples = [ordered]@{
     summarise = @{

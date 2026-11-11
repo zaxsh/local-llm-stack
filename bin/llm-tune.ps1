@@ -35,7 +35,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$llmRoot = 'C:\Users\fih\llm'
+$llmRoot = Split-Path $PSScriptRoot -Parent
 $buildsRoot = Join-Path $llmRoot 'llama.cpp'
 $tag = Get-ChildItem $buildsRoot -Directory | Sort-Object { [int]($_.Name -replace '\D', '') } -Descending |
     Select-Object -First 1 -ExpandProperty Name

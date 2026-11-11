@@ -27,8 +27,8 @@
 [CmdletBinding()]
 param(
     [switch]$Fix,
-    [string]$ModelsPath = 'C:\Users\fih\llm\models',
-    [string]$OllamaModelsPath = 'C:\Users\fih\.cache\huggingface\hub'
+    [string]$ModelsPath = (Join-Path (Split-Path $PSScriptRoot -Parent) 'models'),
+    [string]$OllamaModelsPath = "$env:USERPROFILE\.cache\huggingface\hub"
 )
 
 $ErrorActionPreference = 'Continue'
@@ -161,7 +161,7 @@ if ($Fix) {
     Line ("      active: " + ((powercfg /getactivescheme) -join ''))
 
     Line "  [4] Defender exclusions for multi-GB model files ..."
-    foreach ($p in $ModelsPath, $OllamaModelsPath, 'C:\Users\fih\.lmstudio\models') {
+    foreach ($p in $ModelsPath, $OllamaModelsPath, (Join-Path $env:USERPROFILE '.lmstudio\models')) {
         if (Test-Path $p) {
             try { Add-MpPreference -ExclusionPath $p -ErrorAction Stop; Line "      + $p" 'DarkGray' }
             catch { Line "      ! $p : $($_.Exception.Message)" 'Yellow' }

@@ -22,12 +22,12 @@ param(
     [int]$Threads = 16,
     [int]$MaxTokens = 250,
     [string]$Alias = 'sweep',
-    [string]$Out = 'C:\Users\fih\llm\bench\ncmoe-sweep.csv'
+    [string]$Out = (Join-Path (Split-Path $PSScriptRoot -Parent) 'bench\ncmoe-sweep.csv')
 )
 
 $ErrorActionPreference = 'Continue'
 $Values = @($Values -split '[,\s]+' | Where-Object { $_ -match '^\d+$' } | ForEach-Object { [int]$_ })
-$exe = 'C:\Users\fih\llm\llama.cpp\b12255\cuda\llama-server.exe'
+$exe = (Join-Path (Split-Path $PSScriptRoot -Parent) 'llama.cpp\b12255\cuda\llama-server.exe')
 $log = "$env:TEMP\sweep.log"
 $err = "$env:TEMP\sweep.err"
 New-Item -ItemType Directory -Force -Path (Split-Path $Out) | Out-Null

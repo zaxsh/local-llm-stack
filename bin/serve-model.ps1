@@ -13,7 +13,7 @@
 .PARAMETER Model
     One of:
       gemma4                        registry key from llm-up.ps1 (if the name matches one)
-      Qwen3-8B-Q4_K_M.gguf          a file in C:\Users\fih\llm\models
+      Qwen3-8B-Q4_K_M.gguf          a file in .\models
       C:\path\to\model.gguf         a full path
       qwen3.6:35b-a3b-mtp-q4_K_M    an Ollama tag (must already be pulled)
 

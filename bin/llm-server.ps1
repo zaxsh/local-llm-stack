@@ -23,7 +23,7 @@
       * model bigger than ~7 GB              -> auto + -CpuMoe <n>  (MoE hybrid split)
 
 .EXAMPLE
-    .\llm-server.ps1 -Model C:\Users\fih\llm\models\Qwen3-8B-Q4_K_M.gguf
+    .\llm-server.ps1 -Model .\models\Qwen3-8B-Q4_K_M.gguf
     .\llm-server.ps1 -Model .\models\Qwen3-30B-A3B-Q4_K_M.gguf -CpuMoe 40 -Ctx 32768
     .\llm-server.ps1 -Model .\models\Qwen3-8B-Q4_K_M.gguf -Backend cuda -DryRun
 #>
@@ -80,7 +80,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$llmRoot = 'C:\Users\fih\llm'
+$llmRoot = Split-Path $PSScriptRoot -Parent
 
 # --- locate the newest llama.cpp build -------------------------------------
 $buildsRoot = Join-Path $llmRoot 'llama.cpp'
@@ -123,7 +123,7 @@ function Resolve-LlmModel([string]$Name) {
     $roots = @()
     if ($env:OLLAMA_MODELS) { $roots += $env:OLLAMA_MODELS }
     $roots += (Join-Path $env:USERPROFILE '.ollama\models')
-    $roots += 'C:\Users\fih\.cache\huggingface\hub'
+    $roots += "$env:USERPROFILE\.cache\huggingface\hub"
 
     $n = $Name; $tag = 'latest'
     if ($n -match '^(.*):([^:]+)$') { $n = $Matches[1]; $tag = $Matches[2] }

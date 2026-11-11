@@ -10,7 +10,7 @@
 param([switch]$SkipPython)
 
 $ErrorActionPreference = 'Continue'
-$llmRoot = 'C:\Users\fih\llm'
+$llmRoot = Split-Path $PSScriptRoot -Parent
 $rows = [System.Collections.Generic.List[object]]::new()
 
 function Add-Row([string]$component, [string]$status, [string]$detail) {

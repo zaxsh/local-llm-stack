@@ -22,13 +22,13 @@ param(
     [int]$SafetyMB = 400,
     [int]$MaxTokens = 300,
     [switch]$Apply,
-    [string]$Out = 'C:\Users\fih\llm\bench\maxctx.csv'
+    [string]$Out = (Join-Path (Split-Path $PSScriptRoot -Parent) 'bench\maxctx.csv')
 )
 
 $ErrorActionPreference = 'Continue'
 $bin = $PSScriptRoot
-$modelsDir = 'C:\Users\fih\llm\models'
-$exe = 'C:\Users\fih\llm\llama.cpp\b12255\cuda\llama-server.exe'
+$modelsDir = (Join-Path (Split-Path $PSScriptRoot -Parent) 'models')
+$exe = (Join-Path (Split-Path $PSScriptRoot -Parent) 'llama.cpp\b12255\cuda\llama-server.exe')
 $smi = "$env:SystemRoot\System32\nvidia-smi.exe"
 New-Item -ItemType Directory -Force -Path (Split-Path $Out) | Out-Null
 

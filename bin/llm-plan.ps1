@@ -20,7 +20,7 @@
 
 .EXAMPLE
     .\llm-plan.ps1 -Model .\models\Qwen3-8B-Q4_K_M.gguf
-    .\llm-plan.ps1 -Model C:\Users\fih\.cache\huggingface\hub\blobs\sha256-97cc8009...
+    .\llm-plan.ps1 -Model $env:USERPROFILE\.cache\huggingface\hub\blobs\sha256-97cc8009...
 #>
 [CmdletBinding()]
 param(
@@ -34,7 +34,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$llmRoot = 'C:\Users\fih\llm'
+$llmRoot = Split-Path $PSScriptRoot -Parent
 
 if (-not (Test-Path $Model)) {
     $c = Join-Path (Join-Path $llmRoot 'models') $Model

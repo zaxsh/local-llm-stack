@@ -13,7 +13,7 @@
     (8 P-cores + 12 E-cores).
 
 .EXAMPLE
-    .\llm-bench.ps1 -Model C:\Users\fih\llm\models\Qwen3-8B-Q4_K_M.gguf
+    .\llm-bench.ps1 -Model .\models\Qwen3-8B-Q4_K_M.gguf
     .\llm-bench.ps1 -Model .\models\model.gguf -NoThreadSweep
 #>
 [CmdletBinding()]
@@ -27,7 +27,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$llmRoot = 'C:\Users\fih\llm'
+$llmRoot = Split-Path $PSScriptRoot -Parent
 $buildsRoot = Join-Path $llmRoot 'llama.cpp'
 $tag = Get-ChildItem $buildsRoot -Directory | Sort-Object { [int]($_.Name -replace '\D', '') } -Descending |
     Select-Object -First 1 -ExpandProperty Name

@@ -24,8 +24,8 @@ param(
 $ctxList = @($Candidates -split '[,\s]+' | Where-Object { $_ } | ForEach-Object { [int]$_ })
 $ErrorActionPreference = 'Continue'
 $bin = $PSScriptRoot
-$modelsDir = 'C:\Users\fih\llm\models'
-$exe = 'C:\Users\fih\llm\llama.cpp\b12255\cuda\llama-server.exe'
+$modelsDir = (Join-Path (Split-Path $PSScriptRoot -Parent) 'models')
+$exe = (Join-Path (Split-Path $PSScriptRoot -Parent) 'llama.cpp\b12255\cuda\llama-server.exe')
 $upPath = Join-Path $bin 'llm-up.ps1'
 $up = Get-Content $upPath -Raw
 

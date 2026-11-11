@@ -8,6 +8,6 @@ pwsh -NoProfile -File "%USERPROFILE%\llm\bin\connect-dsh.ps1" -Port 8083
 echo.
 echo  Opening dsh-tui. Use /model to pick the local route.
 echo.
-pwsh -NoProfile -File "C:\Users\fih\AppData\Roaming\npm\dsh-tui.ps1"
+pwsh -NoProfile -File "%APPDATA%\npm\dsh-tui.ps1"
 echo.
 pause

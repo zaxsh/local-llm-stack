@@ -46,7 +46,7 @@ function Find-Manifest {
         $ManifestPath,
         (Join-Path $PSScriptRoot 'models.manifest.json'),
         (Join-Path (Split-Path $PSScriptRoot -Parent) 'models.manifest.json'),
-        'C:\Users\fih\llm\models.manifest.json'
+        (Join-Path (Split-Path $PSScriptRoot -Parent) 'models.manifest.json')
     ) | Where-Object { $_ }
     foreach ($c in $cands) { if (Test-Path -LiteralPath $c) { return (Resolve-Path -LiteralPath $c).Path } }
     throw "models.manifest.json not found (looked next to this script and in llm\)"
@@ -57,7 +57,7 @@ function Find-ModelsDir {
     # a bundle folder that has the engine next to it wins, so the launcher and the files agree
     $near = Join-Path (Split-Path $PSScriptRoot -Parent) 'models'
     if (Test-Path (Join-Path (Split-Path $PSScriptRoot -Parent) 'llama-server.exe')) { return $near }
-    if (Test-Path 'C:\Users\fih\llm\models') { return 'C:\Users\fih\llm\models' }
+    if (Test-Path (Join-Path (Split-Path $PSScriptRoot -Parent) 'models')) { return (Join-Path (Split-Path $PSScriptRoot -Parent) 'models') }
     return $near
 }
 
