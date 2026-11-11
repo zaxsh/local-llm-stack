@@ -1,0 +1,12 @@
+
+  === coder36 ===
+  ctx 16384 -> 28672   KV 21.504 bytes/token   trained for 262144
+  speed 37,1 -> 37,1 t/s   (ok)
+
+
+Model   CtxNow CtxMax CtxTrain BytesPerTok FreeHi TpsNow TpsMax Status
+-----   ------ ------ -------- ----------- ------ ------ ------ ------
+coder36  16384  28672   262144    21504,00    689  37,10  37,10 ok
+
+  applied coder36: 16384 -> 28672
+  now run: .\llm-desktop.ps1 -SkipBinaries ; .\llm-direct.ps1

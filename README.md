@@ -1,6 +1,6 @@
 # 40B models on an 8 GB laptop GPU
 
-![The launcher: six models, one at a time, with the download button and a live log pane](docs/img/launcher.png)
+![The launcher: seven models, one at a time, with the download button and a live log pane](docs/img/launcher.png)
 
 A local-inference stack for one exact machine - Core Ultra 7 255HX, 32 GB DDR5-5600, RTX 5060 Laptop
 with 8 GB - where every flag was measured instead of guessed, and the guesses that turned out wrong
@@ -15,6 +15,7 @@ with a 131072-token context**, both on the same 8 GB card, one at a time.
 |---|--:|--:|--:|---|---|
 | **Gemma 4 E4B** QAT UD-Q4_K_XL | 4.2 GB | **74.1 t/s** | 131072 | yes | the default: fast, huge context, drives agents |
 | **Qwen3.6 35B-A3B** MoE UD-Q4_K_S | 21.7 GB | 34.0 t/s | 20480 | yes | strongest answers that still fit |
+| **Qwen3.6 27B-A3B Coder** MoE Q4_K_M | 16.1 GB | **44.4 t/s** | 32768 | yes | code, with the best speed-per-capability here |
 | **flint 40B** NVFP4 MoE | 22.9 GB | 29.8 t/s | 49152 | yes | longest context on a big model |
 | **gpt-oss 20B** MXFP4 | 13.8 GB | 30.8 t/s | 24576 | no | chat only |
 | **Qwen3 8B** Q4_K_M | 5.2 GB | 59.0 t/s | 16384 | yes | small and quick, thinks first |
@@ -70,7 +71,7 @@ Prefer to drive it by hand?
 | `GUIDE.md` | **for an agent picking this up cold**: the method, the current state, the traps, what to do next |
 | `bin\` | 25 scripts: registry, fetcher, bundle builder, launcher builder, benchmarks, self-test, agent connectors |
 | `models.manifest.json` | the catalogue: repo, file, exact size, sha256 per model |
-| `presets\` | the tuned flags for all six models, readable without running anything |
+| `presets\` | the tuned flags for all seven models, readable without running anything |
 | `launchers\` | the Desktop shortcuts |
 | `docs\` | the results, the method, the project state, the client wiring guide |
 | `bench\` | the CSVs the numbers came from |
@@ -744,6 +745,7 @@ card, found by trial load — not by arithmetic:
 | `gemma4` | 131072 | 131072 | 74.1 t/s | −4 % (was 32k) |
 | `flint` | 49152 | 262144 | 29.8 t/s | none |
 | `coder` | 32768 | 32768 | 50.3 t/s | −4 % |
+| `coder36` | 32768 | 262144 | 44.4 t/s | −1 % (45.0 at 16k); 34816 fails its first completion |
 | `gptoss` | 24576 | 131072 | 30.8 t/s | −10 % |
 | `qwen36` | 20480 | 262144 | 34.0 t/s | −13 % |
 | `qwen3` | 16384 | 40960 | 59.0 t/s | — (20480 will not load) |
@@ -762,7 +764,8 @@ To move a value: edit `Ctx` for that row, then
 Studio, Magnitude and Steam resident, free VRAM at 16384 is only 200-300 MB, so the extrapolation
 goes negative and proposes contexts *smaller* than the ones already working (it suggested 14336 for
 qwen3 and 11264 for gpt-oss, both of which serve 16384 today). Free VRAM is a residual, not a
-budget.
+budget. It did it again for `coder36`: it proposed 28672, and walking candidates upward served
+**32768** at the same `-n-cpu-moe 26` — 4096 tokens it left on the table.
 
 Use `bin\llm-ctxgrow.ps1` instead — it walks candidates upward and keeps the last one that served a
 real completion:
@@ -797,12 +800,15 @@ The GGUFs are 74 GB and none of them belong in git. `models.manifest.json` is th
 | `flint` | `RecursiveSI/flint-nvfp4-gguf` | `flint-nvfp4.gguf` | 22.86 GB | **byte-identical** (sha256 match) |
 | `qwen36` | `unsloth/Qwen3.6-35B-A3B-MTP-GGUF` | `Qwen3.6-35B-A3B-UD-Q4_K_S.gguf` | 21.39 GB | nearest published size (local: 21.72 GB) |
 | `gptoss` | `ggml-org/gpt-oss-20b-GGUF` | `gpt-oss-20b-MXFP4.gguf` | 12.11 GB | canonical MXFP4 (local: 13.79 GB) |
+| `coder36` | `ManniX-ITA/Qwen3.6-27B-A3B-Coder-MTP-GGUF` | `Qwen3.6-27B-A3B-Coder-Q4_K_M.gguf` | 16.06 GB | **byte-identical** — the publisher ships a `.sha256` beside every quant |
 | `qwen3` | `Qwen/Qwen3-8B-GGUF` | `Qwen3-8B-Q4_K_M.gguf` | 5.03 GB | official, same name (local: 5.23 GB) |
 | `coder` | `Qwen/Qwen2.5-Coder-7B-Instruct-GGUF` | `qwen2.5-coder-7b-instruct-q4_k_m.gguf` | 4.68 GB | official, same size (sha differs by 512 bytes) |
 
-Provenance was established by hashing the six local files and comparing against the LFS `sha256`
+Provenance was established by hashing the seven local files and comparing against the LFS `sha256`
 that the Hub API reports for every sibling of a candidate repo — and by reading `fsutil hardlink
-list` on each file, which names the blob it was hardlinked from. Two matched exactly. The rest were
+list` on each file, which names the blob it was hardlinked from. Three matched exactly — and for
+`coder36` there was nothing to interpret at all, because the uploader publishes a `.sha256` file next
+to every quant, so a 15 GB download can be *proved* rather than assumed. The rest were
 downloaded months ago from uploaders that have since re-quantised or vanished; for those the
 catalogue points at the closest published equivalent and records the sha256 of the copy that was
 actually benchmarked. Anywhere the sizes differ, the downloaded file is *smaller*, which is the safe

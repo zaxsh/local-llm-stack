@@ -14,8 +14,12 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$Model,
-    # Comma-separated on purpose: `pwsh -File script.ps1 -Values 20,24` collapses into one string
-    # before it can bind to [int[]], so accept the string and split it here.
+    # Comma- or space-separated. Two separate traps live here, both worth knowing:
+    #   1. `pwsh -File script.ps1 -Values 20,24` can collapse into one string before it can bind to
+    #      [int[]], so accept the string and split it here.
+    #   2. A [string] parameter keeps its type constraint for the whole scope, so reassigning it to
+    #      the split array silently coerces the array BACK to one space-joined string - and then
+    #      `foreach` over that string runs exactly once with "20 24" as the value. Hence $targets.
     [string]$Values = '20,24,26,28,30,32,34',
     [int]$Port = 8090,
     [int]$Ctx = 16384,
@@ -26,7 +30,11 @@ param(
 )
 
 $ErrorActionPreference = 'Continue'
-$Values = @($Values -split '[,\s]+' | Where-Object { $_ -match '^\d+$' } | ForEach-Object { [int]$_ })
+$targets = @($Values -split '[,\s]+' | Where-Object { $_ -match '^\d+$' } | ForEach-Object { [int]$_ })
+if ($targets.Count -eq 0) {
+    Write-Host "  no numbers in -Values '$Values' - nothing to sweep" -ForegroundColor Red
+    exit 1
+}
 $exe = (Join-Path (Split-Path $PSScriptRoot -Parent) 'llama.cpp\b12255\cuda\llama-server.exe')
 $log = "$env:TEMP\sweep.log"
 $err = "$env:TEMP\sweep.err"
@@ -35,7 +43,7 @@ New-Item -ItemType Directory -Force -Path (Split-Path $Out) | Out-Null
 
 $prompt = 'Write a Python function that parses a CSV file into a list of dicts, handling quoted fields, then explain in two sentences how it handles escaped quotes.'
 
-foreach ($n in $Values) {
+foreach ($n in $targets) {
     Get-Process llama-server -ErrorAction SilentlyContinue | Stop-Process -Force
     Start-Sleep -Seconds 2
     Remove-Item $log, $err -ErrorAction SilentlyContinue

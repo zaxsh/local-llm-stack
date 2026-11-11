@@ -17,17 +17,18 @@ Generated 2026-11-11 19:00 on MSI-Crosshair.
 | `flint` | 6.59 GB | 28.6 s | 65 C |
 | `gptoss` | 7.64 GB | 24.1 s | 64 C |
 | `qwen36` | 7.18 GB | 25.6 s | 65 C |
+| `coder36` | 7.38 GB | 12.2 s | 49 C |
 
 ## Generation speed per prompt (t/s)
 
-| prompt | `coder` | `flint` | `gemma4` | `gptoss` | `qwen3` | `qwen36` |
-|---|---|---|---|---|---|---|
-| Summarise a document | 57.5 | 29.9 | 69.9 | 25.2 | 57.4 | 43.3 |
-| Write code from a spec | 57.6 | 37.1 | 72 | 30 | 56.8 | 36.4 |
-| Debug a traceback | 57.5 | 25.2 | 81.1 | 34.7 | 40.2 | 46.9 |
-| Multi-step arithmetic | 55.9 | 34.1 | 85.5 | 34.7 | 42 | 39.2 |
-| Extract structured data | 57.8 | 36.6 | 88.9 | 25.1 | 21.9 | 43.4 |
-| Call a tool | 58.1 | 35.9 | 88.7 | 30.9 | 16.5 | 47 |
+| prompt | `coder` | `coder36` | `flint` | `gemma4` | `gptoss` | `qwen3` | `qwen36` |
+|---|---|---|---|---|---|---|---|
+| Summarise a document | 57.5 | 43.9 | 29.9 | 69.9 | 25.2 | 57.4 | 43.3 |
+| Write code from a spec | 57.6 | 37.7 | 37.1 | 72 | 30 | 56.8 | 36.4 |
+| Debug a traceback | 57.5 | 45.4 | 25.2 | 81.1 | 34.7 | 40.2 | 46.9 |
+| Multi-step arithmetic | 55.9 | 45 | 34.1 | 85.5 | 34.7 | 42 | 39.2 |
+| Extract structured data | 57.8 | 34 | 36.6 | 88.9 | 25.1 | 21.9 | 43.4 |
+| Call a tool | 58.1 | 45.1 | 35.9 | 88.7 | 30.9 | 16.5 | 47 |
 
 ## Prompt processing, time to first token
 
@@ -39,6 +40,7 @@ Generated 2026-11-11 19:00 on MSI-Crosshair.
 | `gptoss` | 106 t/s | 1083 ms | 20.5 s |
 | `qwen3` | 843 t/s | 208 ms | 18 s |
 | `qwen36` | 57 t/s | 2805 ms | 21.2 s |
+| `coder36` | 91 t/s | 1686 ms | 20.3 s |
 
 ## Tool calling
 
@@ -47,13 +49,15 @@ Generated 2026-11-11 19:00 on MSI-Crosshair.
 - **gemma4**: native `tool_calls`: `get_weather({"city":"Istanbul"})`
 - **gptoss**: no tool call - answered in prose (finish: stop)
 - **qwen3**: native `tool_calls`: `get_weather({"city": "Istanbul"})`
-- **qwen36**: native `tool_calls`: `get_weather({"city":"Istanbul"})`
+- **qwen36**: native `tool_calls`: `get_weather({"city":"Istanbul"})` 
+- **coder36**: native `tool_calls`: `get_weather({"city":"Istanbul"})`
 
 ## What to use, and why
 
 - **gemma4**: 81 t/s average generation (worst seen 69,9), 131 ms to first token, native tools: yes
 - **coder**: 57,4 t/s average generation (worst seen 55,9), 84 ms to first token, native tools: NO - cannot drive an agent loop
 - **qwen36**: 42,7 t/s average generation (worst seen 36,4), 2805 ms to first token, native tools: yes
+- **coder36**: 41,8 t/s average generation (worst seen 34), 1686 ms to first token, native tools: yes - the coding model: 32k of context at that speed
 - **qwen3**: 39,1 t/s average generation (worst seen 16,5), 208 ms to first token, native tools: yes
 - **flint**: 33,1 t/s average generation (worst seen 25,2), 3850 ms to first token, native tools: yes
 - **gptoss**: 30,1 t/s average generation (worst seen 25,1), 1083 ms to first token, native tools: NO - cannot drive an agent loop

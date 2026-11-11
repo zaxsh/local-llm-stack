@@ -1,0 +1,5 @@
+"Model","Ctx","OK","Tps","Why"
+"coder36","28672","True","33,9","ok"
+"coder36","30720","True","33,6","ok"
+"coder36","32768","True","33,9","ok"
+"coder36","34816","False","0","completion failed"

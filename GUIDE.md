@@ -138,86 +138,106 @@ free VRAM. Both have already produced wrong answers here.
 | `coder` | Qwen2.5-Coder-7B Q4_K_M | 4.36 GB | 32768 | 50.3 | 8081 | 0 | **no** |
 | `gptoss` | gpt-oss-20b MXFP4 | 11.28 GB | 24576 (32768 OOM) | 30.8 | 8082 | 14 | **no** |
 | `qwen36` | Qwen3.6-35B-A3B-MTP UD-Q4_K_S | 19.92 GB | 20480 (24576 loads, cannot finish) | 34.0 | 8084 | 30 | yes |
-| `coder36` | Qwen3.6-27B-A3B-Coder Q4_K_M | 14.95 GB | **provisional 16384** | **unmeasured** | 8085 | **provisional 24** | unknown |
+| `coder36` | Qwen3.6-27B-A3B-Coder Q4_K_M | 14.95 GB | 32768 (34816 fails) | 44.4 | 8085 | 26 | yes |
 
-`coder36` is the seventh model and it is **not finished**. Its flags are placeholders, explicitly
-marked `PROVISIONAL` in the registry, and it appears in no performance table. See §7.
+`coder36` was finished on 2026-11-12; §7 is the record of how, including the two tools it exposed.
+It is the fastest model here that still handles 32k of context, and the only one whose file is
+**proved** byte-identical to its source rather than matched by size.
 
-## 7. Where we are right now (2026-11-12, 01:20)
+## 7. How the seventh model was finished (2026-11-12, 02:20)
 
-The model to add: `ManniX-ITA/Qwen3.6-27B-A3B-Coder-MTP-GGUF`, quant `Q4_K_M`,
-**16,057,050,592 bytes exactly**, publisher's sha256
-`baf6dfd9eb22799143ae96c89ddb2971733e2f3029783685e18c873c576457de`.
+This is the worked example of the recipe in §9, including the parts that went wrong, because that is
+what a cold agent actually needs.
 
-What it is: an **expert-pruned** Qwen3.6-35B-A3B — 256 → **184 experts**, top-**10** routing baked
-in (not 8), 26.66 B total, ~3 B active, architecture string `qwen35moe`, Apache-2.0. It **thinks
-before answering**, and llama.cpp can bound that with `--reasoning-budget N` (present in b12255).
-None of the six existing presets sets a thinking budget, so for comparability this one does not
-either — but it is worth offering in the registry note, because a coder model that thinks can eat a
-16k context before writing a single line.
+**The model.** `ManniX-ITA/Qwen3.6-27B-A3B-Coder-MTP-GGUF`, `Q4_K_M`, **16,057,050,592 bytes
+exactly**, publisher's sha256 `baf6dfd9eb22799143ae96c89ddb2971733e2f3029783685e18c873c576457de`.
+An expert prune of Qwen3.6-35B-A3B: 256 → **184 experts**, top-**10** routing baked in, 26.66 B total,
+~3 B active, architecture string `qwen35moe` (which b12255 already supports — check that *before*
+downloading 15 GB).
 
-**State of the download, and why it is a story:**
+**Getting the bytes was the hard part.** The link (WARP on) ran at 0.03–2.1 MB/s. Facts established by
+measurement, not assumption:
 
-- The link (WARP enabled) ran at 0.03–2.1 MB/s. `hf download` **stalls at 0 bytes** on this link
-  while plain `curl` to the same URL proceeds — that is a fact about this network, not about `hf`.
-- One connection: 2.0 MB/s. Eight connections with 20 MB ranges: 3.9 MB/s. Sixteen: 4.05 MB/s → the
-  link saturates near 4 MB/s. **But** a single 1.87 GB range ran at 0.33 MB/s and eight of them sat
-  at 0 bytes for three minutes: **large ranges are the problem, not parallelism**.
-- So the transfer is **174 chunks of 64 MB, 8 workers** (`%TEMP%\chunks-coder36\cNNNN.bin`), stitched
-  with a streamed `.NET` copy, then hashed before being renamed into place. At 01:20 it was
-  **113/174 chunks**.
-- Script: `C:\Users\fih\.dsh\segmented-coder36.ps1`; log `C:\Users\fih\.dsh\coder36-finish.log`.
-  The `.part` file (`models\qwen3.6-27b-a3b-coder-q4km.gguf.part`) holds the first 4,383,946,060
-  bytes from the earlier single-stream attempt and is reused, not re-downloaded.
-- A measurement chain is already queued (`C:\Users\fih\.dsh\measure-coder36.ps1`): the moment the
-  verified file exists it runs `llm-ncmoe-sweep.ps1 -Values 16,18,20,22,24,26,28 -Ctx 16384
-  -Threads 16` into `bench\ncmoe-coder36.csv`, logging to `bench\measure-coder36.log`.
+| what | measured |
+|---|---|
+| `hf download` | stalls at 0 bytes on this link while `curl` to the same URL proceeds |
+| one connection | 2.0 MB/s |
+| 8 connections, 20 MB ranges | 3.9 MB/s |
+| 16 connections | 4.05 MB/s — the link saturates here |
+| 8 connections, **1.87 GB** ranges | 0.33 MB/s, and eight of them sat at 0 bytes for 3 minutes |
 
-**Do not trust the process ids in this document; check them.** Find the real ones with
-`Get-Process curl` and `Get-CimInstance Win32_Process -Filter "Name='pwsh.exe'"`.
+So the problem was **range size, not parallelism**. Final transfer: **174 chunks of 64 MB, 8 workers**,
+stitched with a streamed `.NET` copy, hashed, renamed. The first 4.38 GB from an earlier single-stream
+attempt was reused (`-C -`), not re-downloaded.
 
-## 8. How to continue from here
+**The measurements, in the order they were taken:**
+
+| question | answer |
+|---|---|
+| `--n-cpu-moe` floor at 16k | 28 → 33.9 t/s, **26 → 45.0 t/s**, 24 → real CUDA OOM (`failed to allocate CUDA0 buffer of size 360583296`) |
+| context ceiling | `llm-maxctx` *extrapolated* 28672; `llm-ctxgrow` trial-loaded **32768** (34816 fails its first completion) |
+| re-checked at 32768 | 26 → **44.4 t/s**, 28 → 43.6, 30 → 35.2 — the floor does not move when the context grows |
+| tool calls | native `tool_calls`, verified with a real `get_weather` request |
+| VRAM at 32k | 7.38 GB of 7.96 GiB, load 12.2 s, 49 °C |
+
+**It thinks before it answers, and that changes what a user feels.** Same coding prompt, 28k context:
+
+| configuration | speed | wall time | reasoning |
+|---|---|---|---|
+| default (top-10 routing) | 37.2 t/s | 35.7 s | 4403 chars before the first line of code |
+| `--reasoning-budget 512` | 41.1 t/s | **20.3 s** | 2157 chars |
+| `--override-kv qwen35moe.expert_used_count=int:8` | **43.6 t/s** | 28.3 s | 3817 chars |
+
+The preset ships the model author's own top-10 routing and no thinking cap; both knobs are documented
+because the speed gain of 8 experts is real but its quality cost was never measured, and this
+repository does not ship numbers it cannot defend.
+
+**Two tools were broken by this model, and both are fixed:**
+
+1. `bin/llm-ncmoe-sweep.ps1` declared `[string]$Values` and then reassigned it to the split array — but
+   a parameter's type constraint survives the whole scope, so the array was coerced straight back into
+   `"26 28 30"` and the loop ran once, sweeping one bogus configuration. Every multi-value sweep ever
+   run with that tool was wrong. The split now goes into `$targets`.
+2. `bin/llm-scenarios.ps1` kept its own maps of filename, port and alias instead of reading the
+   registry, so it reported coder36 as "not downloaded" while the file sat in `models\`. It now parses
+   the registry like everything else.
+
+Both are instances of the same lesson: **one source of truth, or the copies drift.**
+
+## 8. The state of the repository right now, and how to re-verify it
+
+Seven models, all measured, all in the registry, the catalogue, `presets\`, the launcher and the
+README. `main` is released as **v1.1.0**.
 
 ```powershell
 cd C:\Users\fih\llm
 
-# 1. is the file there yet?
-Get-Content C:\Users\fih\.dsh\coder36-finish.log -Tail 5
+# is everything consistent?
+pwsh -NoProfile -File .\bin\llm-selftest.ps1        # 7 checks: scripts, registry<->catalogue, presets, launcher
 
-# 2. if the chunks stopped, just re-run this - it skips every chunk already correct
-pwsh -NoProfile -File C:\Users\fih\.dsh\segmented-coder36.ps1
-
-# 3. when the sweep CSV exists, read it
-Get-Content bench\ncmoe-coder36.csv
-
-# 4. pick the lowest --n-cpu-moe that is not OOM and is fastest; put it in the registry
-#    (bin/llm-up.ps1, the coder36 line), then regenerate everything:
-pwsh -NoProfile -File .\bin\llm-desktop.ps1 -SkipBinaries
-pwsh -NoProfile -File .\bin\llm-direct.ps1
-#    and sync the generated preset back into the repository copy:
-Copy-Item "$env:USERPROFILE\Desktop\llama.cpp\presets\coder36.cmd" .\presets\ -Force
-
-# 5. the context ceiling, measured and applied
-pwsh -NoProfile -File .\bin\llm-maxctx.ps1 -Models coder36 -Apply
-#    then regenerate presets again (maxctx rewrites Ctx in the registry)
-
-# 6. prove it works end to end, including a real tool call
-pwsh -NoProfile -File .\bin\llm-selftest.ps1
+# does the model actually work, end to end, including a tool call?
 pwsh -NoProfile -File .\bin\llm-verify-bundle.ps1
+
+# what does the launcher see?
+& "$env:USERPROFILE\Desktop\llama.cpp\llama-direct.exe" --list
+
+# re-measure one model's split or ceiling
+pwsh -NoProfile -File .\bin\llm-ncmoe-sweep.ps1 -Model .\models\<file>.gguf -Values '26 28 30' -Ctx 32768
+pwsh -NoProfile -File .\bin\llm-ctxgrow.ps1 -Model <key> -Candidates '28672,32768,34816'
 ```
 
-Then, and only then, the paperwork that makes it a fact:
+`bench\` holds the CSVs behind every one of those numbers: `ncmoe-coder36.csv`,
+`ncmoe-coder36-at-28k.csv`, `ncmoe-coder36-at-32k.csv`, `ctxgrow-coder36.csv`, `maxctx-coder36.csv`.
 
-1. `models.manifest.json` — set `verified: true`, `localSha256` to the hash you computed, and rewrite
-   the `note` from *TO BE MEASURED* to the measured one-liner.
-2. `README.md` — §3 (memory budget), §4 (measured performance), §14 (context ceilings), §15 (where
-   the models came from). One row, real numbers.
-3. `docs/PROJECT-CONTEXT.md` — replace the *in progress* section with what actually happened.
-4. `bench\` — keep the sweep and maxctx CSVs; they are the evidence.
-5. `git add -A`, commit in the house voice (see §11), push, confirm CI green.
-6. Cut **v1.1.0** (new model = minor bump): tag HEAD, `git archive` the zip, `gh release create`
-   with `llama-direct.exe`, the zip and `SHA256SUMS.txt`.
+**Open, in priority order:**
 
+1. Does the **MTP head** help? Both `-MTP` models ignore it today (the engine logs the `nextn`
+   tensors as unused). `bin\llm-speccmp.ps1` is the tool; nobody has run it on them.
+2. **flint vs qwen36 head-to-head** on the same prompts — the repository has both at 30 and 34 t/s but
+   no answer to "which one should I actually use".
+3. Whether `--reasoning-budget` should become a preset default. It halved wall time on a coding
+   prompt; it also removes thinking the model might have needed. That is a judgement call, not a
+   measurement.
 ## 9. Adding the eighth model (the recipe, generalised)
 
 1. **Is the repo public?** `curl -s https://huggingface.co/api/models/<repo>?blobs=true` → `gated`,
@@ -277,6 +297,15 @@ Each of these cost real time. Do not rediscover them.
 14. **`web_fetch` refuses `127.0.0.1`.** Use `curl`/`Invoke-RestMethod` for local endpoints.
 15. **Commands may start in `C:\WINDOWS\system32`.** Pass an explicit working directory, or `cd`
     first, or use absolute paths. A relative path "not found" is usually this.
+16. **A parameter keeps its type constraint for the whole scope.** `param([string]$Values)` followed
+    by `$Values = @($Values -split ...)` does not produce an array — it produces the array coerced
+    right back into `"26 28 30"`, so `foreach` runs **once** over that string. This silently broke
+    every multi-value `llm-ncmoe-sweep.ps1` run until 2026-11-12; the split now lands in `$targets`.
+    If you need a value to change type, rename the variable.
+17. **Keep no second copy of the registry.** `llm-scenarios.ps1` had its own switch blocks for
+    filename/port/alias, so a newly registered model was reported "not downloaded" while it sat in
+    `models\` and served fine. If a script needs the file name, port or alias, it parses
+    `llm-up.ps1` — that is the rule, and the self-test only checks some of the files that follow it.
 
 ## 11. House rules (how this repository is written)
 
@@ -293,17 +322,3 @@ Each of these cost real time. Do not rediscover them.
   work, tag the last verified commit rather than shipping placeholders (v1.0.3 was cut that way).
 - **Style of the response to the user**: one line beginning with `⏵` describing the current action,
   then the content. Terse, evidence-first.
-
-## 12. Open questions, in priority order
-
-1. Finish `coder36`: sweep → context ceiling → registry → docs → **v1.1.0**.
-2. Does `--override-kv qwen35moe.expert_used_count=int:8` (8 experts instead of the baked-in 10)
-   buy enough speed to be worth the quality trade? Measure both, then decide — the model card
-   suggests it as the cheaper option, but nothing has been measured on this GPU.
-3. Does the MTP head actually help here? `bin/llm-speccmp.ps1` answers it for a model; nobody has
-   run it on the two `-MTP` models yet.
-4. `flint` at 29.8 t/s and `qwen36` at 34.0 t/s are the two "big" options; a head-to-head on the same
-   prompts (via `bin/llm-scenarios.ps1`) would say which one to actually use, and that answer is not
-   in the repository yet.
-5. The twelve remaining `C:\Users\fih` mentions in the docs are deliberate (they are the machine
-   record), but they do leak a username in a public repo. Scrub them if that ever matters.

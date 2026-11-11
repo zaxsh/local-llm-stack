@@ -115,16 +115,24 @@ function Invoke-Scenario([int]$Port, $S, [string]$ModelId) {
 $results = @()
 $meta = @()
 
-foreach ($m in $modelList) {
-    $file = switch ($m) {
-        'gemma4' { 'gemma-4-E4B-it-q4kxl.gguf' }
-        'qwen3'  { 'Qwen3-8B-Q4_K_M.gguf' }
-        'coder'  { 'qwen2.5-coder-7b-q4km.gguf' }
-        'flint'  { 'flint-nvfp4-40b.gguf' }
-        'gptoss' { 'gpt-oss-20b-MXFP4.gguf' }
-        'qwen36' { 'qwen3.6-35b-a3b-mtp-q4km.gguf' }
-        default  { "$m.gguf" }
+# File, port and alias come from the registry in llm-up.ps1. This used to be three switch blocks
+# listing every model by name, which meant adding a model worked everywhere except here: coder36 was
+# reported as "not downloaded" while it sat in models\ and served fine. One source of truth.
+$registry = @{}
+foreach ($line in (Get-Content (Join-Path $bin 'llm-up.ps1'))) {
+    if ($line -match "^\s*(\w+)\s*=\s*@\{\s*File\s*=\s*'([^']+)'\s*;\s*Port\s*=\s*(\d+)\s*;\s*Alias\s*=\s*'([^']+)'") {
+        $registry[$Matches[1]] = @{ File = $Matches[2]; Port = [int]$Matches[3]; Alias = $Matches[4] }
     }
+}
+
+foreach ($m in $modelList) {
+    if (-not $registry.ContainsKey($m)) {
+        Write-Host "  skip $m (not in the registry)" -ForegroundColor DarkYellow
+        continue
+    }
+    $file  = $registry[$m].File
+    $port  = $registry[$m].Port
+    $alias = $registry[$m].Alias
     if (-not (Test-Path (Join-Path $modelNamesDir $file))) {
         Write-Host "  skip $m (not downloaded)" -ForegroundColor DarkYellow
         continue
@@ -134,9 +142,6 @@ foreach ($m in $modelList) {
     $loadSw = [Diagnostics.Stopwatch]::StartNew()
     & (Join-Path $bin 'llm-up.ps1') $m | Out-Null
     $loadSw.Stop()
-
-    $port = switch ($m) { 'flint' { 8080 } 'gptoss' { 8082 } 'gemma4' { 8083 } 'qwen36' { 8084 } default { 8081 } }
-    $alias = switch ($m) { 'flint' { 'flint-nvfp4-40b' } 'gptoss' { 'gpt-oss-20b' } 'gemma4' { 'gemma-4-e4b' } 'qwen3' { 'qwen3-8b' } 'coder' { 'qwen2.5-coder-7b' } 'qwen36' { 'qwen3.6-35b-a3b' } default { 'local' } }
 
     try { $health = (Invoke-RestMethod "http://127.0.0.1:$port/health" -TimeoutSec 5).status } catch { $health = 'down' }
     if ($health -ne 'ok') {

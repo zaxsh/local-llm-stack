@@ -42,7 +42,7 @@ This laptop has two memory pools with a 7.5× difference between them:
 So the question is never "how big is the model". It is "what fraction of its weights does this
 token actually touch, and where do those bytes live".
 
-### The six models, with the arithmetic
+### The seven models, with the arithmetic
 
 `bytes/token` is read from each GGUF's own header (see §2). The ceiling is `bytes ÷ bandwidth`.
 The measured column is real, from the report.
@@ -54,6 +54,7 @@ The measured column is real, from the report.
 | Qwen3-8B (dense) | 4.86 GB | VRAM | 92 t/s | 56 t/s | 61 % |
 | flint 40B (MoE, CPU experts) | 1.92 GB | DDR5 | 31 t/s | 19-44 t/s | see §5.2 |
 | gpt-oss-20b (MoE, split) | 4.54 GB | mixed | 64 t/s | 30 t/s | 47 % |
+| Qwen3.6-27B-A3B-Coder (MoE, split) | 2.27 GB | mixed: 15 layers in VRAM, 26 in DDR5 | 38 t/s if everything came from DDR5 | 42 t/s | above 100 % - the VRAM layers carry it |
 | *any* dense model on CPU | 4.36 GB | DDR5 | 14 t/s | 13 t/s | 93 % |
 
 The model does its job: it predicts the ranking correctly, and lands within roughly a third of the

@@ -269,30 +269,43 @@ Same 94 MB file, back to back, both runs surviving a dropped connection:
 2.4×. The absolute numbers are the line's, not xet's. `-HighPerformance` sets
 `HF_XET_HIGH_PERFORMANCE=1` for more parallel ranges.
 
-### coder36 — the seventh model (in progress, 2026-11-11 night)
+### coder36 — the seventh model (finished, 2026-11-12 02:20)
 
-`ManniX-ITA/Qwen3.6-27B-A3B-Coder-MTP-GGUF`, Q4_K_M, 16,057,050,592 bytes exactly, port 8085,
-alias `qwen3.6-27b-a3b-coder`, file `qwen3.6-27b-a3b-coder-q4km.gguf`. Wired into the registry,
-the catalogue, `presets\` and the launcher; the launcher already lists it as *missing*.
+`ManniX-ITA/Qwen3.6-27B-A3B-Coder-MTP-GGUF`, Q4_K_M, **16,057,050,592 bytes exactly**, port 8085,
+alias `qwen3.6-27b-a3b-coder`, file `qwen3.6-27b-a3b-coder-q4km.gguf`. It is an **expert prune** of
+Qwen3.6-35B-A3B: 256 -> **184 experts**, top-**10** routing baked in, 26.66 B total, ~3 B active,
+architecture string `qwen35moe`, Apache-2.0.
 
-**Its flags are provisional** (`-c 16384 --n-cpu-moe 24 -t 16`) and must be replaced by measurements
-before this model appears in the README tables or gets a release. Nothing about it is quoted
-anywhere as a performance number yet.
+**Final flags: `-c 32768 --n-cpu-moe 26 -t 16` -> 44.4 t/s.** Every part of that came from a
+measurement:
 
-Why it is taking a night: this repo publishes a `.sha256` next to every quant, so the local copy can
-be *proved* byte-identical rather than assumed. Verifying needs the whole 15 GB, and the link has been
-running at 0.03-0.43 MB/s, i.e. ~10 h. `hf download` stalls at 0 bytes on this link while plain
-`curl` proceeds, so the transfer is:
+| step | what happened |
+|---|---|
+| floor | `--n-cpu-moe` 28 -> 33.9 t/s, **26 -> 45.0 t/s**, 24 -> real CUDA OOM (`failed to allocate CUDA0 buffer of size 360583296`). 26 is both the floor and the fastest. |
+| ceiling | `llm-maxctx.ps1` extrapolated 28672 from free VRAM. `llm-ctxgrow.ps1` then served **32768** at the same setting, and 34816 failed its first completion. |
+| re-check | at 32768: 26 -> **44.4 t/s**, 28 -> 43.6, 30 -> 35.2. The floor did not move when the context grew. |
+| tools | native `tool_calls`, verified with a real `get_weather` request against llama.cpp directly (43 t/s). |
 
-    curl -L -C - --retry 20 --retry-all-errors -o models\qwen3.6-27b-a3b-coder-q4km.gguf.part <resolve url>
+**It thinks before it answers**, and that changes the numbers a user sees. Same coding prompt, three
+configurations, 28k context: default routing 37.2 t/s over 1197 tokens and **35.7 s** wall time
+(4403 characters of reasoning before the first line of code); `--reasoning-budget 512` cut that to
+**20.3 s**; `--override-kv qwen35moe.expert_used_count=int:8` reached **43.6 t/s** in 28.3 s but
+trades routing quality for speed, which was not measured, so the preset ships the model's own
+top-10 default and both flags are documented instead of applied.
 
-and `C:\Users\fih\.dsh\finish-coder36.ps1` watches for it, checks size and sha256 against
-`baf6dfd9eb22799143ae96c89ddb2971733e2f3029783685e18c873c576457de`, and only then renames the `.part`
-into place. Log: `C:\Users\fih\.dsh\coder36-finish.log`.
+**The download is the story of the night.** The link ran at 0.03-2.1 MB/s, `hf download` stalled at
+0 bytes where plain `curl` proceeded, one connection gave 2.0 MB/s, eight gave 3.9, sixteen 4.05 —
+and a single 1.87 GB range collapsed to 0.33 MB/s while eight of them sat at zero bytes for three
+minutes. So large ranges were the problem, not parallelism: the file came down as **174 chunks of
+64 MB, 8 at a time**, stitched and hashed. The publisher ships a `.sha256` beside every quant, so the
+result is `verified: true` in the strict sense — proved byte-identical, not assumed.
 
-When it lands: sweep `--n-cpu-moe` (start at 24, go down while it fits), then find the context
-ceiling by trial load (a 200-token completion, not `/health`), then fill in registry, README §3/§4/§14,
-the two report docs and the manifest `verified`/`localSha256`, and release.
+**A tool was broken by this model and is now fixed.** `llm-ncmoe-sweep.ps1` declared
+`[string]$Values` and then reassigned it to the split array — but a parameter's type constraint
+survives for the whole scope, so the array was coerced straight back into `"26 28 30"` and the loop
+ran once with that string as a single value. Every multi-value sweep had therefore been silently
+sweeping one bogus configuration. The split now goes into `$targets`. Found by using the tool, which
+is the only way this kind of bug surfaces.
 ### The front door (added for v1.0.1)
 
 `get-started.ps1` is now the entry point: machine check, engine download (pinned `b12255`, from

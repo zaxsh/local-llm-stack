@@ -83,9 +83,9 @@
       "sizeBytes": 16057050592,
       "quant": "Q4_K_M",
       "params": "27B MoE (3B active), coder, MTP",
-      "verified": false,
-      "localSha256": null,
-      "note": "TO BE MEASURED - downloading. The publisher ships a .sha256 next to every quant, so the local copy can be proved byte-identical instead of assumed."
+      "verified": true,
+      "localSha256": "baf6dfd9eb22799143ae96c89ddb2971733e2f3029783685e18c873c576457de",
+      "note": "Byte-identical to what the publisher serves: the repo ships a .sha256 beside every quant and the local 15 GB file hashes to it. Expert-pruned Qwen3.6-35B-A3B (256->184 experts, top-10 routing), 26.66B total, ~3B active. 44.4 t/s at max ctx 32768 with -n-cpu-moe 26 (24 is a real CUDA OOM); native tool calls; thinks before answering."
     }
   ]
 }
