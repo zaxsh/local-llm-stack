@@ -1,0 +1,41 @@
+# Model weights. 74 GB of GGUF does not belong in git - bin/llm-fetch.ps1 pulls exactly what the
+# registry needs, from the repos listed in models.manifest.json.
+models/
+*.gguf
+
+# The engine: 1.2 GB of llama.cpp binaries per build (b12255 cuda / vulkan / cpu / openvino)
+llama.cpp/
+
+# Vendored build tools (cmake, ninja) - installed by hand, not source
+tools/
+
+# Python environment for the shim and the Hugging Face tooling
+venv/
+__pycache__/
+*.pyc
+
+# Run logs from ad-hoc experiments; the CSVs in bench/ are the ones that matter
+logs/
+
+# Compiled launcher - rebuilt by bin/llm-direct.ps1, attached to releases instead of committed
+*.exe
+*.dll
+dist/
+
+# Secrets. Never, under any name.
+.env
+*.env
+.hf-token
+token
+stored_tokens
+*credential*
+*.pem
+*.key
+
+# Editor and OS noise
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+*.tmp
+*.bak

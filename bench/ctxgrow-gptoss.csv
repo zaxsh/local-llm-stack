@@ -1,0 +1,5 @@
+"Model","Ctx","OK","Tps","Why"
+"gptoss","16384","True","33,6","ok"
+"gptoss","20480","True","33,4","ok"
+"gptoss","24576","True","25,6","ok"
+"gptoss","32768","False","0","exited"

@@ -1,0 +1,4 @@
+"Model","Ctx","OK","Tps","Why"
+"qwen36","16384","True","31,1","ok"
+"qwen36","20480","True","21,2","ok"
+"qwen36","24576","False","0","completion failed"

@@ -1,0 +1,3 @@
+"Model","Ctx","OK","Tps","Why"
+"qwen3","16384","True","48,6","ok"
+"qwen3","20480","False","0","exited"

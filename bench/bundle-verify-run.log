@@ -1,0 +1,55 @@
+
+  === coder ===
+  args: -m models\qwen2.5-coder-7b-q4km.gguf --alias qwen2.5-coder-7b --host 127.0.0.1 --port 8081 -c 32768 --jinja --metrics --no-warmup -t 20 -tb 20 -ngl 99 -fa on -ctk f16 -ctv f16
+  loaded in 8,3s, serving on :8081
+  generation: 50,3 t/s (300 tokens, finish length)
+  tool call: no
+  stopped: 0 processes left, 359 MB still in use
+
+  === flint ===
+  args: -m models\flint-nvfp4-40b.gguf --alias flint-nvfp4-40b --host 127.0.0.1 --port 8080 -c 49152 --jinja --metrics --no-warmup -t 16 -tb 16 -ngl 99 -fa on -ctk f16 -ctv f16 --n-cpu-moe 40
+  loaded in 21,5s, serving on :8080
+  generation: 29,8 t/s (300 tokens, finish length)
+  tool call: get_weather({"city":"Istanbul"})
+  stopped: 0 processes left, 357 MB still in use
+
+  === gemma4 ===
+  args: -m models\gemma-4-E4B-it-q4kxl.gguf --alias gemma-4-e4b --host 127.0.0.1 --port 8083 -c 131072 --jinja --metrics --no-warmup -t 20 -tb 20 -ngl 99 -fa on -ctk f16 -ctv f16
+  loaded in 5,1s, serving on :8083
+  generation: 74,1 t/s (300 tokens, finish length)
+  tool call: get_weather({"city":"Istanbul"})
+  stopped: 0 processes left, 357 MB still in use
+
+  === gptoss ===
+  args: -m models\gpt-oss-20b-MXFP4.gguf --alias gpt-oss-20b --host 127.0.0.1 --port 8082 -c 24576 --jinja --metrics --no-warmup -t 20 -tb 20 -ngl 99 -fa on -ctk f16 -ctv f16 --n-cpu-moe 14
+  loaded in 17,4s, serving on :8082
+  generation: 30,8 t/s (300 tokens, finish length)
+  tool call: no
+  stopped: 0 processes left, 354 MB still in use
+
+  === qwen3 ===
+  args: -m models\Qwen3-8B-Q4_K_M.gguf --alias qwen3-8b --host 127.0.0.1 --port 8081 -c 16384 --jinja --metrics --no-warmup -t 20 -tb 20 -ngl 99 -fa on -ctk f16 -ctv f16
+  loaded in 8,2s, serving on :8081
+  generation: 59,0 t/s (300 tokens, finish length)
+  tool call: get_weather({"city": "Istanbul"})
+  stopped: 0 processes left, 353 MB still in use
+
+  === qwen36 ===
+  args: -m models\qwen3.6-35b-a3b-mtp-q4km.gguf --alias qwen3.6-35b-a3b --host 127.0.0.1 --port 8084 -c 20480 --jinja --metrics --no-warmup -t 16 -tb 16 -ngl 99 -fa on -ctk f16 -ctv f16 --n-cpu-moe 30
+  loaded in 21,6s, serving on :8084
+  generation: 34,0 t/s (300 tokens, finish length)
+  tool call: get_weather({"city":"Istanbul"})
+  stopped: 0 processes left, 337 MB still in use
+
+  ================= bundle verification =================
+
+preset model            port load_s gen_tps tool_call                         stopped
+------ -----            ---- ------ ------- ---------                         -------
+coder  qwen2.5-coder-7b 8081 8.3    50.3    no                                yes
+flint  flint-nvfp4-40b  8080 21.5   29.8    get_weather({city":"Istanbul"})"  yes
+gemma4 gemma-4-e4b      8083 5.1    74.1    get_weather({city":"Istanbul"})"  yes
+gptoss gpt-oss-20b      8082 17.4   30.8    no                                yes
+qwen3  qwen3-8b         8081 8.2    59      get_weather({city": "Istanbul"})" yes
+qwen36 qwen3.6-35b-a3b  8084 21.6   34      get_weather({city":"Istanbul"})"  yes
+
+  all presets load, answer, and release the GPU

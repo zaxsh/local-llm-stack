@@ -1,0 +1,41 @@
+# Local-LLM Python stack for Intel Core Ultra 7 255HX + Intel iGPU (no discrete GPU)
+# Install with:  uv pip install --python C:\Users\fih\llm\venv\Scripts\python.exe -r requirements.txt
+#
+# torch must come from the CPU index first, otherwise pip tries to pull CUDA wheels:
+#   uv pip install --python ... --index-url https://download.pytorch.org/whl/cpu torch torchvision torchaudio
+
+# --- transformers / HF ---
+transformers>=5.0
+accelerate
+safetensors
+tokenizers
+sentencepiece
+sentence-transformers
+datasets
+peft
+trl
+huggingface_hub[hf_transfer]
+hf_transfer
+jinja2
+numpy
+scipy
+pillow
+
+# --- Intel iGPU path ---
+openvino
+openvino-genai
+openvino-tokenizers
+optimum-intel
+onnx
+onnxruntime
+
+# --- GGUF python bindings (CPU; rebuild from source for Vulkan) ---
+llama-cpp-python
+
+# --- local API / UI ---
+gradio
+fastapi
+uvicorn
+openai
+pydantic
+python-dotenv

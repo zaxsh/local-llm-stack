@@ -1,0 +1,7 @@
+preset,model,port,load_s,health,gen_tps,gen_tokens,finish,tool_call,stopped,vram_after
+coder,qwen2.5-coder-7b,8081,8.3,ok,50.3,300,length,"no",yes,359
+flint,flint-nvfp4-40b,8080,21.5,ok,29.8,300,length,"get_weather({"city":"Istanbul"})",yes,357
+gemma4,gemma-4-e4b,8083,5.1,ok,74.1,300,length,"get_weather({"city":"Istanbul"})",yes,357
+gptoss,gpt-oss-20b,8082,17.4,ok,30.8,300,length,"no",yes,354
+qwen3,qwen3-8b,8081,8.2,ok,59,300,length,"get_weather({"city": "Istanbul"})",yes,353
+qwen36,qwen3.6-35b-a3b,8084,21.6,ok,34,300,length,"get_weather({"city":"Istanbul"})",yes,337

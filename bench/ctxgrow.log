@@ -1,0 +1,45 @@
+  qwen3    trying ctx 16384
+           48,6 t/s  (ok)
+  qwen3    trying ctx 20480
+           0 t/s  (exited)
+
+  qwen3 : largest context that loads = 16384  (48,6 t/s)
+
+Model   Ctx    OK   Tps Why
+-----   ---    --   --- ---
+qwen3 16384  True 48,60 ok
+qwen3 20480 False     0 exited
+
+  gptoss   trying ctx 16384
+           33,6 t/s  (ok)
+  gptoss   trying ctx 20480
+           33,4 t/s  (ok)
+  gptoss   trying ctx 24576
+           25,6 t/s  (ok)
+  gptoss   trying ctx 32768
+           0 t/s  (exited)
+
+  gptoss : largest context that loads = 24576  (25,6 t/s)
+
+Model    Ctx    OK   Tps Why
+-----    ---    --   --- ---
+gptoss 16384  True 33,60 ok
+gptoss 20480  True 33,40 ok
+gptoss 24576  True 25,60 ok
+gptoss 32768 False     0 exited
+
+  qwen36   trying ctx 16384
+           31,1 t/s  (ok)
+  qwen36   trying ctx 20480
+           21,2 t/s  (ok)
+  qwen36   trying ctx 24576
+           0 t/s  (completion failed)
+
+  qwen36 : largest context that loads = 20480  (21,2 t/s)
+
+Model    Ctx    OK   Tps Why
+-----    ---    --   --- ---
+qwen36 16384  True 31,10 ok
+qwen36 20480  True 21,20 ok
+qwen36 24576 False     0 completion failed
+

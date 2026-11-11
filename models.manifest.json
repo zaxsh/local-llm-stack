@@ -1,0 +1,79 @@
+{
+  "_comment": "Model catalogue for this stack. 'repo' + 'repoFile' is what llm-fetch.ps1 downloads; 'file' is the name it must have in models\\ for the registry, presets and launcher to find it. 'localSha256' is the sha256 of the exact file benchmarked on this machine (record only - uploaders can re-upload the same quant with different bytes). 'verified' means the local file is byte-identical to what this source serves.",
+  "version": 2,
+  "updated": "2026-11-11",
+  "models": [
+    {
+      "key": "gemma4",
+      "file": "gemma-4-E4B-it-q4kxl.gguf",
+      "repo": "unsloth/gemma-4-E4B-it-qat-GGUF",
+      "repoFile": "gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf",
+      "sizeBytes": 4215695776,
+      "quant": "UD-Q4_K_XL (QAT)",
+      "params": "4B dense (Gemma 4 E4B)",
+      "verified": true,
+      "localSha256": "df0fd4ee07072c607c29a0a1cb4f98918426cca12f45a2776bdd6ee6d09a4de3",
+      "note": "Byte-identical to the file benchmarked here. Fastest model - 74 t/s at 131k context, native tool calls."
+    },
+    {
+      "key": "flint",
+      "file": "flint-nvfp4-40b.gguf",
+      "repo": "RecursiveSI/flint-nvfp4-gguf",
+      "repoFile": "flint-nvfp4.gguf",
+      "sizeBytes": 22863084160,
+      "quant": "NVFP4",
+      "params": "40B MoE (2.5B active)",
+      "verified": true,
+      "localSha256": "97cc8009ff9b132d5cf3c488e6767962bb5a5dc158a90ed661bbbddf876b8bde",
+      "note": "Byte-identical. 30 t/s at 49k context. NVFP4 has no fast CPU vector path, so the expert layers stay on the GPU."
+    },
+    {
+      "key": "qwen36",
+      "file": "qwen3.6-35b-a3b-mtp-q4km.gguf",
+      "repo": "unsloth/Qwen3.6-35B-A3B-MTP-GGUF",
+      "repoFile": "Qwen3.6-35B-A3B-UD-Q4_K_S.gguf",
+      "sizeBytes": 21388319008,
+      "quant": "UD-Q4_K_S",
+      "params": "35B MoE (8 of 256 experts, 3B active)",
+      "verified": false,
+      "localSha256": "d372de8e934898a59e6ccfabc3368474711384d8f1fd4d22d87a3f0a45400cdc",
+      "note": "Strongest model - 34 t/s at 20.5k context, native tool calls. The local copy (21.72 GB) came from another uploader; this is the closest published size, ~0.3 GB smaller, so it will fit at the same -n-cpu-moe 30."
+    },
+    {
+      "key": "gptoss",
+      "file": "gpt-oss-20b-MXFP4.gguf",
+      "repo": "ggml-org/gpt-oss-20b-GGUF",
+      "repoFile": "gpt-oss-20b-MXFP4.gguf",
+      "sizeBytes": 12109566624,
+      "quant": "MXFP4",
+      "params": "20B MoE",
+      "verified": false,
+      "localSha256": "8ecb5d4ad6172c63f9cbf1a07a04e525985a8a11a6e516da02b674c4010de716",
+      "note": "Canonical MXFP4 build by the llama.cpp team. About 1.7 GB smaller than the local copy, so 24576 context fits comfortably. No native tool calls - cannot drive an agent loop."
+    },
+    {
+      "key": "qwen3",
+      "file": "Qwen3-8B-Q4_K_M.gguf",
+      "repo": "Qwen/Qwen3-8B-GGUF",
+      "repoFile": "Qwen3-8B-Q4_K_M.gguf",
+      "sizeBytes": 5027783488,
+      "quant": "Q4_K_M",
+      "params": "8B dense",
+      "verified": false,
+      "localSha256": "a3de86cd1c132c822487ededd47a324c50491393e6565cd14bafa40d0b8e686f",
+      "note": "Official Qwen release, same filename. Thinks before answering; 59 t/s at 16k context (its ceiling on this card)."
+    },
+    {
+      "key": "coder",
+      "file": "qwen2.5-coder-7b-q4km.gguf",
+      "repo": "Qwen/Qwen2.5-Coder-7B-Instruct-GGUF",
+      "repoFile": "qwen2.5-coder-7b-instruct-q4_k_m.gguf",
+      "sizeBytes": 4683073536,
+      "quant": "Q4_K_M",
+      "params": "7B dense",
+      "verified": false,
+      "localSha256": "60e05f2100071479f596b964f89f510f057ce397ea22f2833a0cfe029bfc2463",
+      "note": "Official Qwen release; same byte size as the local copy. 50 t/s at its full 32768 context, but NO native tool calls."
+    }
+  ]
+}
