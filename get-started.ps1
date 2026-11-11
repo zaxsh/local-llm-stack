@@ -26,6 +26,8 @@ param(
     [switch]$NoLaunch,
     [switch]$Yes,
     [string]$EngineTag = 'b12255',
+    # an existing llama.cpp build to use instead of looking under llama.cpp\<tag>\
+    [string]$Engine,
     [string]$Bundle = "$env:USERPROFILE\Desktop\llama.cpp"
 )
 
@@ -158,14 +160,20 @@ else {
 # ------------------------------------------------------------------ 4. the bundle and the launcher
 Head 4 4 "the bundle and the launcher"
 $engine = $null
+if ($Engine -and (Test-Path (Join-Path $Engine 'llama-server.exe'))) { $engine = $Engine }
 foreach ($cand in @($cudaDir,
                     (Join-Path $root "llama.cpp\$EngineTag\vulkan"),
                     (Join-Path $root "llama.cpp\$EngineTag\cpu"))) {
     if (Test-Path (Join-Path $cand 'llama-server.exe')) { $engine = $cand; break }
 }
 if (-not $engine) {
-    Bad "no llama-server.exe found under llama.cpp\ - the bundle needs the engine"
-    $engine = $cudaDir
+    Bad "no llama-server.exe under llama.cpp\ - there is nothing to put in a bundle"
+    Note "run this script again without -SkipEngine and it installs the pinned build (~715 MB)"
+    Note "or point it at one you already have:  .\get-started.ps1 -Engine C:\path\to\bin"
+    Write-Host ""
+    Write-Host "  stopped before building anything incomplete." -ForegroundColor Yellow
+    Write-Host ""
+    exit 1
 }
 else { Ok ("engine: " + $engine) }
 

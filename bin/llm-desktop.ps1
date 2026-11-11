@@ -45,6 +45,21 @@ if (-not $Build) {
 }
 if (-not $SourceModels) { $SourceModels = Join-Path $repo 'models' }
 
+# Fail with a sentence rather than a raw Get-ChildItem error halfway through: a bundle with no
+# engine in it cannot start anything, and a half-built folder is worse than no folder.
+if (-not $SkipBinaries -and -not (Test-Path (Join-Path $Build 'llama-server.exe'))) {
+    Write-Host ""
+    Write-Host "  no engine at $Build" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "  A bundle without llama-server.exe cannot start a model, so nothing was built." -ForegroundColor DarkGray
+    Write-Host "  Either let get-started.ps1 fetch the pinned build for you:" -ForegroundColor DarkGray
+    Write-Host "      .\get-started.ps1" -ForegroundColor Gray
+    Write-Host "  or point -Build at a folder that already has llama-server.exe:" -ForegroundColor DarkGray
+    Write-Host "      .\bin\llm-desktop.ps1 -Build C:\path\to\llama.cpp\build\bin" -ForegroundColor Gray
+    Write-Host "  or ask for only the presets and the model links:  -SkipBinaries" -ForegroundColor DarkGray
+    Write-Host ""
+    exit 1
+}
 Write-Host ""
 Write-Host "  building $Destination" -ForegroundColor Cyan
 New-Item -ItemType Directory -Force -Path $Destination | Out-Null
