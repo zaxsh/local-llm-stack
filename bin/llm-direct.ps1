@@ -69,7 +69,8 @@ foreach ($k in $entries.Keys) {
     $title = if ($f) { $f.Title } else { $k }
     $sub = if ($f) { $f.Sub } else { '' }
     $args = "-m `"models\$($e.File)`" --alias $($e.Alias) --host 127.0.0.1 --port $($e.Port) -c $($e.Ctx) --jinja --metrics --no-warmup -t $($e.Threads) -tb $($e.Threads) -ngl 99 -fa on -ctk f16 -ctv f16"
-    $args = $args.Replace('"', '""')
+    # no quote-doubling here: CsLiteral() emits a verbatim @"..." string and doubles them itself.
+    # Doing it in both places sent -m ""models\x.gguf"" to the engine.
     if ($e.CpuMoe -gt 0) { $args += " --n-cpu-moe $($e.CpuMoe)" }
 
     $cat = $catalog[$k]
@@ -83,6 +84,11 @@ foreach ($k in $entries.Keys) {
         (CsLiteral $e.File), (CsLiteral $repo), (CsLiteral $repoFile), $size))
 }
 $modelBlock = ($cs -join "`r`n")
+
+# Guard against the escaping bug that shipped once: quotes were doubled for a verbatim string and
+# then doubled again, so the engine received -m ""models\x.gguf"" and silently misbehaved. Four
+# consecutive quotes can only mean double escaping.
+if ($modelBlock -match '""""') { throw "model arguments look double-escaped - check CsLiteral() against the -m line" }
 
 # ---------------------------------------------------------------- source
 # Single-quoted here-string: nothing in the C# is interpreted by PowerShell.
