@@ -211,7 +211,7 @@ at 24576 loads, answers `/health`, and then fails its first real completion.
 
 ## 9. Where this lives now — GitHub, and getting the models back (2026‑11‑11 21:35)
 
-**Repo:** `https://github.com/zaxsh/local-llm-stack` — **private**, branch `main`, tag `v1.0.0`,
+**Repo:** `https://github.com/zaxsh/local-llm-stack` — **public**, branch `main`, tag `v1.0.0`,
 first release published with two assets.
 
 ```
