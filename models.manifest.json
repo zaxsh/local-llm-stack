@@ -74,6 +74,18 @@
       "verified": false,
       "localSha256": "60e05f2100071479f596b964f89f510f057ce397ea22f2833a0cfe029bfc2463",
       "note": "Official Qwen release; same byte size as the local copy. 50 t/s at its full 32768 context, but NO native tool calls."
+    },
+    {
+      "key": "coder36",
+      "file": "qwen3.6-27b-a3b-coder-q4km.gguf",
+      "repo": "ManniX-ITA/Qwen3.6-27B-A3B-Coder-MTP-GGUF",
+      "repoFile": "Qwen3.6-27B-A3B-Coder-Q4_K_M.gguf",
+      "sizeBytes": 16057050592,
+      "quant": "Q4_K_M",
+      "params": "27B MoE (3B active), coder, MTP",
+      "verified": false,
+      "localSha256": null,
+      "note": "TO BE MEASURED - downloading. The publisher ships a .sha256 next to every quant, so the local copy can be proved byte-identical instead of assumed."
     }
   ]
 }

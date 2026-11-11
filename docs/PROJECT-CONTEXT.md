@@ -269,6 +269,30 @@ Same 94 MB file, back to back, both runs surviving a dropped connection:
 2.4×. The absolute numbers are the line's, not xet's. `-HighPerformance` sets
 `HF_XET_HIGH_PERFORMANCE=1` for more parallel ranges.
 
+### coder36 — the seventh model (in progress, 2026-11-11 night)
+
+`ManniX-ITA/Qwen3.6-27B-A3B-Coder-MTP-GGUF`, Q4_K_M, 16,057,050,592 bytes exactly, port 8085,
+alias `qwen3.6-27b-a3b-coder`, file `qwen3.6-27b-a3b-coder-q4km.gguf`. Wired into the registry,
+the catalogue, `presets\` and the launcher; the launcher already lists it as *missing*.
+
+**Its flags are provisional** (`-c 16384 --n-cpu-moe 24 -t 16`) and must be replaced by measurements
+before this model appears in the README tables or gets a release. Nothing about it is quoted
+anywhere as a performance number yet.
+
+Why it is taking a night: this repo publishes a `.sha256` next to every quant, so the local copy can
+be *proved* byte-identical rather than assumed. Verifying needs the whole 15 GB, and the link has been
+running at 0.03-0.43 MB/s, i.e. ~10 h. `hf download` stalls at 0 bytes on this link while plain
+`curl` proceeds, so the transfer is:
+
+    curl -L -C - --retry 20 --retry-all-errors -o models\qwen3.6-27b-a3b-coder-q4km.gguf.part <resolve url>
+
+and `C:\Users\fih\.dsh\finish-coder36.ps1` watches for it, checks size and sha256 against
+`baf6dfd9eb22799143ae96c89ddb2971733e2f3029783685e18c873c576457de`, and only then renames the `.part`
+into place. Log: `C:\Users\fih\.dsh\coder36-finish.log`.
+
+When it lands: sweep `--n-cpu-moe` (start at 24, go down while it fits), then find the context
+ceiling by trial load (a 200-token completion, not `/health`), then fill in registry, README §3/§4/§14,
+the two report docs and the manifest `verified`/`localSha256`, and release.
 ### The front door (added for v1.0.1)
 
 `get-started.ps1` is now the entry point: machine check, engine download (pinned `b12255`, from
