@@ -67,6 +67,7 @@ Prefer to drive it by hand?
 | path | what |
 |---|---|
 | `get-started.ps1` | clone to running model, in one command |
+| `GUIDE.md` | **for an agent picking this up cold**: the method, the current state, the traps, what to do next |
 | `bin\` | 25 scripts: registry, fetcher, bundle builder, launcher builder, benchmarks, self-test, agent connectors |
 | `models.manifest.json` | the catalogue: repo, file, exact size, sha256 per model |
 | `presets\` | the tuned flags for all six models, readable without running anything |
