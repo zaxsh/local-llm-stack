@@ -76,8 +76,10 @@ Prefer to drive it by hand?
 | `.github\workflows\ci.yml` | parses every script, checks the catalogue, compiles the launcher |
 
 The engine and the weights are **not** in the repository: `get-started.ps1` fetches the build,
-`models.manifest.json` + `bin\llm-fetch.ps1` fetch the models. Code is MIT;
-the weights keep their own licences and are redistributed by nobody.
+`models.manifest.json` + `bin\llm-fetch.ps1` fetch the models. The code here is [MIT](LICENSE); the
+weights keep their own licences (Gemma terms of use, Apache-2.0 for the Qwen models, gpt-oss' own
+terms, flint NVFP4 from RecursiveSI) and are downloaded from their authors, never redistributed.
+`models.manifest.json` records where each file came from and what it was when it was measured.
 
 ## Contents
 

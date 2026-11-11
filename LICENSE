@@ -19,11 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-This licence covers the scripts, the launcher and the documentation in this
-repository. It does not cover the model weights: those are not distributed here,
-they are downloaded from their authors, and each keeps its own licence (Gemma
-terms of use, Qwen and Qwen2.5 under Apache-2.0, gpt-oss under its own terms,
-flint NVFP4 from RecursiveSI). Check the repo you download from.
