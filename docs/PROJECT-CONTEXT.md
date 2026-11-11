@@ -222,7 +222,7 @@ local-llm-stack-v1.0.0.zip      152 KB   the whole source tree (bin, presets, la
 | | |
 |---|---|
 | GitHub account | `zaxsh` (gh 2.101.0, keyring, repo + workflow + delete_repo scopes) |
-| Hugging Face account | `turkuazzz` (hf 1.32.0, hf_xet 1.6.0, token at `%USERPROFILE%\.cache\huggingface\token`) |
+| Hugging Face | hf 1.32.0, hf_xet 1.6.0, token at `%USERPROFILE%\.cache\huggingface\token` (no account name here: this repository is public) |
 | What is in git | 65 files: `bin\` (24 scripts), `presets\` (6), `launchers\` (8), `docs\` (4), `bench\` (19), README, manifest, requirements |
 | What is deliberately not | `models\` (74 GB), `llama.cpp\` (1.2 GB), `tools\` (cmake/ninja), `venv\`, `logs\`, any `*.exe` |
 
