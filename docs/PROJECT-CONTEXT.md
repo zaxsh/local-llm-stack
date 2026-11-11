@@ -291,3 +291,11 @@ gh release create v1.0.1 --title "..." --notes-file NOTES.md dist\llama-direct.e
    case‑insensitive) and turns the object into a string, so `$manifest.models` is empty and every
    lookup returns nothing. The fetcher keeps the parsed JSON in `$catalog` for this reason. The same
    trap hit `-Candidates` in `llm-ctxgrow.ps1` (see §7).
+3. **Quotes get doubled twice.** `llama-direct.ps1` generates C# source. The model arguments live in a
+   verbatim `@"..."` literal, where `"` must be written `""` — but the code also kept an older
+   `.Replace('"','""')` from when the literal was a normal `"..."`, so the engine was handed
+   `-m ""models\gemma-4-E4B-it-q4kxl.gguf""`. `/health` still answered, which is why it hid. There is
+   now a `CsLiteral()` used for every emitted string and a build-time throw if the output ever
+   contains four consecutive quotes. Check the running process with
+   `(Get-CimInstance Win32_Process -Filter "Name='llama-server.exe'").CommandLine` when a model
+   behaves oddly: the real command line is the ground truth, not the intent.
