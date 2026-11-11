@@ -360,12 +360,16 @@ class App : Form
     static string FetchScript()
     {
         string b = ResolveBundle();
+        string here = Path.GetDirectoryName(Application.ExecutablePath);
+        string cwd = Directory.GetCurrentDirectory();
         string[] cands = {
-            Path.Combine(b, "fetch", "llm-fetch.ps1"),
+            Path.Combine(b, "fetch", "llm-fetch.ps1"),      // a built Desktop bundle
             Path.Combine(b, "llm-fetch.ps1"),
-            Path.Combine(Directory.GetCurrentDirectory(), "llm-fetch.ps1")
+            Path.Combine(here, "..", "bin", "llm-fetch.ps1"),   // a plain clone: <repo>\bin\llm-fetch.ps1
+            Path.Combine(cwd, "bin", "llm-fetch.ps1"),
+            Path.Combine(cwd, "llm-fetch.ps1")
         };
-        foreach (string c in cands) if (File.Exists(c)) return c;
+        foreach (string c in cands) if (File.Exists(c)) return Path.GetFullPath(c);
         return null;
     }
 

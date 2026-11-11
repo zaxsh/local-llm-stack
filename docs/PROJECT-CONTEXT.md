@@ -206,3 +206,88 @@ at 24576 loads, answers `/health`, and then fails its first real completion.
 * A detached `llama-server` can make a tool call look like it never returns — verify via `/health`.
 * `web_fetch` refuses `127.0.0.1` ("non-public IP").
 * Secrets live in `%LOCALAPPDATA%\hermes\.env` and Ollama's config; don't copy them into new files.
+
+---
+
+## 9. Where this lives now — GitHub, and getting the models back (2026‑11‑11 21:35)
+
+**Repo:** `https://github.com/zaxsh/local-llm-stack` — **private**, branch `main`, tag `v1.0.0`,
+first release published with two assets.
+
+```
+llama-direct.exe                 26 KB   the launcher, same file as on the Desktop
+local-llm-stack-v1.0.0.zip      152 KB   the whole source tree (bin, presets, launchers, docs, bench)
+```
+
+| | |
+|---|---|
+| GitHub account | `zaxsh` (gh 2.101.0, keyring, repo + workflow + delete_repo scopes) |
+| Hugging Face account | `turkuazzz` (hf 1.32.0, hf_xet 1.6.0, token at `%USERPROFILE%\.cache\huggingface\token`) |
+| What is in git | 65 files: `bin\` (24 scripts), `presets\` (6), `launchers\` (8), `docs\` (4), `bench\` (19), README, manifest, requirements |
+| What is deliberately not | `models\` (74 GB), `llama.cpp\` (1.2 GB), `tools\` (cmake/ninja), `venv\`, `logs\`, any `*.exe` |
+
+### The downloader (new)
+
+- `models.manifest.json` — repo + repoFile + exact bytes + sha256 + quant + note, per model.
+- `bin\llm-fetch.ps1` — `-List`, `-Missing`, `-Key`, `-All`, `-DryRun`, `-Token`, `-HighPerformance`,
+  `-Json`. Downloads into `%TEMP%\hf-stage-<key>`, then moves to `models\<registry filename>`.
+  Staging is what makes resume safe and keeps half files out of `models\`.
+- `llama-direct.exe` — the Download button and the masked **HF token...** box; token is written to
+  the standard HF token path, never to a command line or a log. Headless: `--list`,
+  `--download <key>`, `--start <key>`, `--stop`. It is `/target:winexe`, so it calls `AttachConsole`
+  to print when given a command line and stays silent when double-clicked.
+
+### Provenance — how each GGUF was traced
+
+Hashed all six local files, then compared against the LFS `sha256` the Hub API reports for each
+sibling of every candidate repo, and cross‑checked with `fsutil hardlink list` (which names the blob
+each file was hardlinked from).
+
+| local file | source | verdict |
+|---|---|---|
+| `gemma-4-E4B-it-q4kxl.gguf` | `unsloth/gemma-4-E4B-it-qat-GGUF` :: `gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf` | **sha256 identical** |
+| `flint-nvfp4-40b.gguf` | `RecursiveSI/flint-nvfp4-gguf` :: `flint-nvfp4.gguf` | **sha256 identical** |
+| `qwen3.6-35b-a3b-mtp-q4km.gguf` | `unsloth/Qwen3.6-35B-A3B-MTP-GGUF` :: `…UD-Q4_K_S.gguf` | nearest size (21.39 vs 21.72 GB) |
+| `gpt-oss-20b-MXFP4.gguf` | `ggml-org/gpt-oss-20b-GGUF` :: `gpt-oss-20b-MXFP4.gguf` | canonical (12.11 vs 13.79 GB) |
+| `Qwen3-8B-Q4_K_M.gguf` | `Qwen/Qwen3-8B-GGUF` :: `Qwen3-8B-Q4_K_M.gguf` | official, same name (5.03 vs 5.23 GB) |
+| `qwen2.5-coder-7b-q4km.gguf` | `Qwen/Qwen2.5-Coder-7B-Instruct-GGUF` :: `qwen2.5-coder-7b-instruct-q4_k_m.gguf` | official, sha differs by 512 bytes |
+
+The four unverified ones came from uploaders that no longer serve the same bytes. Every substitute
+is *smaller* than the local file, so the tuned `-n-cpu-moe` still fits. `llm-fetch.ps1` treats a file
+as present when it is at least 60 % of the catalogued size — an exact match is too strict and would
+tell you a working 20 GB model is missing.
+
+### xet, measured
+
+Same 94 MB file, back to back, both runs surviving a dropped connection:
+
+| transport | time | rate |
+|---|---|---|
+| plain HTTP (`HF_HUB_DISABLE_XET=1`) | 310 s | 0.30 MB/s |
+| xet (default) | 131 s | 0.72 MB/s |
+
+2.4×. The absolute numbers are the line's, not xet's. `-HighPerformance` sets
+`HF_XET_HIGH_PERFORMANCE=1` for more parallel ranges.
+
+### Re-cutting a release
+
+```powershell
+cd C:\Users\fih\llm
+git add -A; git commit -m "..."
+gh auth status                          # must say zaxsh
+git push                                # git's helper is 'manager'; if it 401s, gh auth setup-git fixes it
+git tag -a v1.0.1 -m "v1.0.1"; git push origin v1.0.1
+.\bin\llm-direct.ps1                    # rebuild the launcher into the bundle
+git archive --format=zip -o dist\local-llm-stack-v1.0.1.zip --prefix=local-llm-stack-1.0.1/ HEAD
+gh release create v1.0.1 --title "..." --notes-file NOTES.md dist\llama-direct.exe dist\local-llm-stack-v1.0.1.zip
+```
+
+### Two traps that bit twice
+
+1. **`git push` after `gh repo create --push` can 401.** The remote is fine; git's own credential
+   helper had nothing. `gh auth setup-git` then `git push origin <tag>`.
+2. **PowerShell `[string]`-typed variables silently re-join objects.** `param([string]$ManifestPath)`
+   plus `$manifest = ... | ConvertFrom-Json` assigns to *the same variable* (names are
+   case‑insensitive) and turns the object into a string, so `$manifest.models` is empty and every
+   lookup returns nothing. The fetcher keeps the parsed JSON in `$catalog` for this reason. The same
+   trap hit `-Candidates` in `llm-ctxgrow.ps1` (see §7).
