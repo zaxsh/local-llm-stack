@@ -28,7 +28,7 @@ param(
     [string]$EngineTag = 'b12255',
     # an existing llama.cpp build to use instead of looking under llama.cpp\<tag>\
     [string]$Engine,
-    [string]$Bundle = "$env:USERPROFILE\Desktop\llama.cpp"
+    [string]$Bundle = "$env:USERPROFILE\Desktop\Local-LLM-Project\llama.cpp"
 )
 
 $ErrorActionPreference = 'Stop'

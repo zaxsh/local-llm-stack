@@ -22,8 +22,8 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Bundle = "$env:USERPROFILE\Desktop\llama.cpp",
-    [string]$DesktopCopy = "$env:USERPROFILE\Desktop\llama-direct.exe"
+    [string]$Bundle = "$env:USERPROFILE\Desktop\Local-LLM-Project\llama.cpp",
+    [string]$DesktopCopy = "$env:USERPROFILE\Desktop\Local-LLM-Project\llama-direct.exe"
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,10 +32,11 @@ $bin = $PSScriptRoot
 # ---------------------------------------------------------------- model list
 $up = Get-Content (Join-Path $bin 'llm-up.ps1') -Raw
 $entries = [ordered]@{}
-foreach ($m in [regex]::Matches($up, "(?m)^\s*(\w+)\s*=\s*@\{\s*File\s*=\s*'([^']+)';\s*Port\s*=\s*(\d+);\s*Alias\s*=\s*'([^']+)';\s*Ctx\s*=\s*(\d+);\s*CpuMoe\s*=\s*(\d+);\s*Threads\s*=\s*(\d+)")) {
+foreach ($m in [regex]::Matches($up, "(?m)^\s*(\w+)\s*=\s*@\{\s*File\s*=\s*'([^']+)';\s*Port\s*=\s*(\d+);\s*Alias\s*=\s*'([^']+)';\s*Ctx\s*=\s*(\d+);\s*CpuMoe\s*=\s*(\d+);\s*Threads\s*=\s*(\d+)(?:;\s*Note\s*=\s*'([^']*)')?")) {
     $entries[$m.Groups[1].Value] = @{
         File = $m.Groups[2].Value; Port = [int]$m.Groups[3].Value; Alias = $m.Groups[4].Value
         Ctx = $m.Groups[5].Value; CpuMoe = [int]$m.Groups[6].Value; Threads = $m.Groups[7].Value
+        Note = $(if ($m.Groups[8].Success) { $m.Groups[8].Value } else { '' })
     }
 }
 if ($entries.Count -eq 0) { throw "could not read the registry from llm-up.ps1" }
@@ -54,6 +55,7 @@ $friendly = [ordered]@{
     qwen3  = @{ Title = 'Qwen3 8B';         Sub = 'balanced - 59 t/s, thinks before answering' }
     coder  = @{ Title = 'Qwen2.5 Coder 7B'; Sub = 'code only - 50 t/s at 32k context, NO tool calls' }
     gptoss = @{ Title = 'gpt-oss 20B';      Sub = '31 t/s at 24k context, no working tool calls' }
+    coder36 = @{ Title = 'Qwen3.6 27B-A3B Coder'; Sub = '44 t/s at 32k context - code, native tool calls' }
 }
 
 function CsLiteral([string]$s) {
@@ -66,8 +68,10 @@ $cs = New-Object System.Collections.Generic.List[string]
 foreach ($k in $entries.Keys) {
     $e = $entries[$k]
     $f = $friendly[$k]
-    $title = if ($f) { $f.Title } else { $k }
-    $sub = if ($f) { $f.Sub } else { '' }
+    # A key that is not in the map above must still show a real name and a real description, taken
+    # from the registry, instead of the bare key and a blank line.
+    $title = if ($f) { $f.Title } else { $e.Alias }
+    $sub = if ($f) { $f.Sub } elseif ($e.Note) { $e.Note } else { '' }
     $args = "-m `"models\$($e.File)`" --alias $($e.Alias) --host 127.0.0.1 --port $($e.Port) -c $($e.Ctx) --jinja --metrics --no-warmup -t $($e.Threads) -tb $($e.Threads) -ngl 99 -fa on -ctk f16 -ctv f16"
     # no quote-doubling here: CsLiteral() emits a verbatim @"..." string and doubles them itself.
     # Doing it in both places sent -m ""models\x.gguf"" to the engine.
@@ -213,7 +217,7 @@ class App : Form
         bundle = ResolveBundle();
 
         Text = "llama.cpp - local models";
-        ClientSize = new Size(500, 500);
+        ClientSize = new Size(500, 548);
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
@@ -233,10 +237,10 @@ class App : Form
         Controls.Add(hint);
 
         list = new ListBox();
-        list.SetBounds(14, 54, 472, 208);
+        list.SetBounds(14, 54, 472, 252);
         list.IntegralHeight = false;
         list.DrawMode = DrawMode.OwnerDrawFixed;
-        list.ItemHeight = 34;
+        list.ItemHeight = 48;
         list.DoubleClick += delegate { StartSelected(); };
         list.SelectedIndexChanged += delegate { UpdateButtons(); };
         list.DrawItem += delegate (object s, DrawItemEventArgs e)
@@ -249,35 +253,39 @@ class App : Form
             Color fg = sel ? SystemColors.HighlightText : (have ? Color.Black : Color.Silver);
             Color fg2 = sel ? SystemColors.HighlightText : (have ? Color.Gray : Color.DarkOrange);
             using (SolidBrush b1 = new SolidBrush(fg)) e.Graphics.DrawString(m.Title, new Font("Segoe UI", 9.75f, FontStyle.Bold), b1, e.Bounds.Left + 6, e.Bounds.Top + 2);
+            // the actual file, in full: it is what the command line uses and what people look for on
+            // disk, and truncating it to save a line was the single worst thing about this list.
+            Color fg3 = sel ? SystemColors.HighlightText : Color.DimGray;
+            using (SolidBrush b3 = new SolidBrush(fg3)) e.Graphics.DrawString(m.File, new Font("Consolas", 7.75f), b3, e.Bounds.Left + 6, e.Bounds.Top + 18);
             string sub = have ? m.Sub : "not downloaded - press Download (" + Human(m.SizeBytes) + ")";
-            using (SolidBrush b2 = new SolidBrush(fg2)) e.Graphics.DrawString(sub, new Font("Segoe UI", 8.25f), b2, e.Bounds.Left + 6, e.Bounds.Top + 18);
+            using (SolidBrush b2 = new SolidBrush(fg2)) e.Graphics.DrawString(sub, new Font("Segoe UI", 8.25f), b2, e.Bounds.Left + 6, e.Bounds.Top + 31);
         };
         Controls.Add(list);
 
-        startBtn = MakeButton("Start model", 14, 270, 110);
+        startBtn = MakeButton("Start model", 14, 314, 110);
         startBtn.Click += delegate { StartSelected(); };
-        openBtn = MakeButton("Open web UI", 130, 270, 110);
+        openBtn = MakeButton("Open web UI", 130, 314, 110);
         openBtn.Click += delegate { OpenUi(); };
-        stopBtn = MakeButton("Stop", 246, 270, 90);
+        stopBtn = MakeButton("Stop", 246, 314, 90);
         stopBtn.Click += delegate { StopServer(); };
-        folderBtn = MakeButton("Folder", 342, 270, 80);
+        folderBtn = MakeButton("Folder", 342, 314, 80);
         folderBtn.Click += delegate { try { Process.Start("explorer.exe", bundle); } catch { } };
 
-        dlBtn = MakeButton("Download", 14, 306, 140);
+        dlBtn = MakeButton("Download", 14, 350, 140);
         dlBtn.Click += delegate { DownloadSelected(); };
-        tokenBtn = MakeButton("HF token...", 160, 306, 110);
+        tokenBtn = MakeButton("HF token...", 160, 350, 110);
         tokenBtn.Click += delegate { AskToken(); };
-        modelsBtn = MakeButton("Models folder", 276, 306, 110);
+        modelsBtn = MakeButton("Models folder", 276, 350, 110);
         modelsBtn.Click += delegate { try { Process.Start("explorer.exe", ModelsDir()); } catch { } };
 
         status = new Label();
-        status.SetBounds(14, 342, 472, 22);
+        status.SetBounds(14, 386, 472, 22);
         status.Text = "Ready.";
         status.ForeColor = Color.DimGray;
         Controls.Add(status);
 
         log = new TextBox();
-        log.SetBounds(14, 366, 472, 92);
+        log.SetBounds(14, 410, 472, 92);
         log.Multiline = true;
         log.ReadOnly = true;
         log.ScrollBars = ScrollBars.Vertical;
@@ -287,7 +295,7 @@ class App : Form
         Controls.Add(log);
 
         Label foot = new Label();
-        foot.SetBounds(14, 464, 472, 30);
+        foot.SetBounds(14, 508, 472, 30);
         foot.ForeColor = Color.Silver;
         foot.Text = "Downloads use Hugging Face xet when available. Nothing leaves this machine otherwise. Closing this window leaves the model running.";
         Controls.Add(foot);
@@ -745,12 +753,29 @@ if (-not $csc) { throw "no C# compiler found (.NET Framework 4.x csc.exe)" }
 
 New-Item -ItemType Directory -Force -Path $Bundle | Out-Null
 $exePath = Join-Path $Bundle 'llama-direct.exe'
-& $csc /nologo /target:winexe /optimize+ "/out:$exePath" `
+# Compile beside the target, never on top of it: if the app is open, Windows locks the image and csc
+# fails with "cannot write output file", which used to be swallowed - the next line reported "built"
+# with the *old* file still in place, which is how a fix can look applied and not be.
+$stage = Join-Path $tmp 'llama-direct.exe'
+if (Test-Path $stage) { Remove-Item $stage -Force }
+& $csc /nologo /target:winexe /optimize+ "/out:$stage" `
     /reference:System.dll /reference:System.Drawing.dll /reference:System.Windows.Forms.dll $csPath 2>&1 |
     ForEach-Object { if ($_ -match 'error') { Write-Host "  $_" -ForegroundColor Red } }
-if (-not (Test-Path $exePath)) { throw "compile failed" }
-
-Copy-Item $exePath $DesktopCopy -Force
+if (-not (Test-Path $stage)) { throw "compile failed (see the errors above)" }
+$stamp = (Get-Item $stage).LastWriteTime
+try {
+    Copy-Item $stage $exePath -Force -ErrorAction Stop
+    Copy-Item $stage $DesktopCopy -Force -ErrorAction Stop
+} catch {
+    $spare = "$exePath.new.exe"
+    Copy-Item $stage $spare -Force
+    Write-Host ""
+    Write-Host "  the launcher is open, so the file is locked - the new build is here:" -ForegroundColor Yellow
+    Write-Host "    $spare" -ForegroundColor Yellow
+    Write-Host "  close the launcher window, then run this script again (or rename .new.exe over it)." -ForegroundColor Yellow
+    exit 2
+}
+if ((Get-Item $exePath).LastWriteTime -ne $stamp) { throw "the exe on disk is still the old one" }
 
 Write-Host ""
 Write-Host ("  built {0}  ({1:N0} KB)" -f $exePath, ((Get-Item $exePath).Length / 1KB)) -ForegroundColor Green

@@ -12,7 +12,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Bundle = "$env:USERPROFILE\Desktop\llama.cpp",
+    [string]$Bundle = "$env:USERPROFILE\Desktop\Local-LLM-Project\llama.cpp",
     [int]$MaxTokens = 300,
     [string]$Out = (Join-Path (Split-Path $PSScriptRoot -Parent) 'bench\bundle-verify.csv')
 )

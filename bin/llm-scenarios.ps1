@@ -17,7 +17,7 @@ param(
     # hands a [string[]] parameter one single string ("a,b,c"), so split it by hand.
     [string]$Models = 'gemma4,qwen3,coder,flint,gptoss',
     [int]$Reps = 1,
-    [string]$Out = "$env:USERPROFILE\Desktop\local-llm-report.md"
+    [string]$Out = "$env:USERPROFILE\Desktop\Local-LLM-Project\docs\local-llm-report.md"
 )
 
 if ($Models -match ',') { $modelList = $Models -split '\s*,\s*' | Where-Object { $_ } }
@@ -309,7 +309,7 @@ foreach ($mo in $modelNames) {
 }
 
 [System.IO.File]::WriteAllText($Out, $md.ToString(), (New-Object System.Text.UTF8Encoding($false)))
-$csv = "$env:USERPROFILE\Desktop\local-llm-results.csv"
+$csv = "$env:USERPROFILE\Desktop\Local-LLM-Project\results\local-llm-results.csv"
 $csvText = ($results | Select-Object Model, Scenario, Rep, PromptN, PromptTps, GenN, GenTps, TtftMs, WallS, Finish, ToolCalls | ConvertTo-Csv -NoTypeInformation) -join "`r`n"
 [System.IO.File]::WriteAllText($csv, $csvText, (New-Object System.Text.UTF8Encoding($false)))
 

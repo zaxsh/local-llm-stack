@@ -22,7 +22,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Destination = "$env:USERPROFILE\Desktop\llama.cpp",
+    [string]$Destination = "$env:USERPROFILE\Desktop\Local-LLM-Project\llama.cpp",
     [switch]$SkipBinaries,
     # left empty so the defaults follow the repository instead of one machine's layout
     [string]$Build,
