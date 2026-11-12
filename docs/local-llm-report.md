@@ -97,6 +97,45 @@ These numbers assume the usual background load (LM Studio, Magnitude, Steam resi
 they can hold 1–3 GB). Close them and every context above can go higher; a trial load is the only
 honest way to find the new ceiling.
 
+### Does the window stay fast once it is full? (2026-11-12 21:56)
+
+Every figure above, and every figure in this report before tonight, was taken on an **empty window**:
+a 41-token prompt into a 131 072-token context. That says what the cache *is*, not what it *costs*,
+and attention cost grows with the tokens sitting in front of the new one.
+
+`bin\llm-stability.ps1` fills the window on purpose — 25 % and 60 % of each model's own `Ctx` — and
+reads decode speed from the server's `timings.predicted_per_second` with `cache_prompt: false`. The
+512-token baseline is measured **before and after** the deep runs, because the clock on this laptop
+moves 8–16 % in five minutes (2500 MHz at 68 °C, 2287 MHz at 75 °C); the ratio below uses the mean
+of the two. 44 measurements, `llm\bench\stability-at-depth.csv`.
+
+| preset | window | empty (512) | 25 % of the window | 60 % of the window | drift | verdict |
+|---|---|---|---|---|---|---|
+| `gemma4` | 131072 | 84,8 t/s | 32 646 tok → **68,4** t/s (81 %) | 78 291 tok → **52,7** t/s (62 %) | +8 % | softens, then breaks |
+| `coder` | 32768 | 61,2 t/s | 8 205 tok → **52,4** t/s (86 %) | 19 614 tok → **48,9** t/s (80 %) | −1 % | softens |
+| `qwen3` | 16384 | 53,2 t/s | 4 108 tok → **48,4** t/s (91 %) | 9 813 tok → **43,6** t/s (82 %) | +1 % | holds to 25 % |
+| `coder36` | 32768 | 40,0 t/s | 8 186 tok → **38,1** t/s (95 %) | 19 594 tok → **37,1** t/s (93 %) | +9 % | holds |
+| `qwen36` | 20480 | 38,4 t/s | 5 127 tok → **38,9** t/s (101 %) | 12 259 tok → **29,7** t/s (77 %) | −16 % | holds to 25 % |
+| `flint` | 49152 | 34,3 t/s | 12 252 tok → **29,6** t/s (86 %) | 29 370 tok → **28,9** t/s (84 %) | +1 % | softens |
+| `gptoss` | 24576 | 27,4 t/s | 6 159 tok → **27,2** t/s (99 %) | 14 718 tok → **25,5** t/s (93 %) | +3 % | holds |
+
+So "context is nearly free" needs one correction: **it is free until the window is actually full, and
+then it depends on the architecture.** The two MoE models with a small KV footprint (`gptoss` 24,6 KiB
+per token, `coder36` ~42 KiB) keep 93 % of their speed with 20 000 tokens of context behind them.
+`gemma4` — 4 B dense, 131k window — keeps 62 % at 78 000 tokens, and it is the only preset whose
+window is wider than what it holds cheaply.
+
+Practical reading: use `gemma4` at 32k interactively, 131k for one-shot long-document passes; the
+others can sit anywhere in their window. `qwen36`'s −16 % drift is the machine (it ran last, on the
+hottest clock), not the model: against the post-run bookend it is 85 %, not 77 %.
+
+Prefill is a different curve. `gemma4` swallows 78 291 tokens at 2 084 t/s (38 s), but `flint` moves
+29 370 tokens at 219 t/s (134 s) with 21 GB of experts crossing PCIe, and `qwen36` 12 259 tokens at
+325 t/s. On an expert-split model the long prompt is the wait, not the answer.
+
+Regenerate the table from the CSV, no GPU needed:
+`pwsh -NoProfile -File .\bin\llm-stability-report.ps1 -Markdown`.
+
 ## Raw answers
 
 ### coder

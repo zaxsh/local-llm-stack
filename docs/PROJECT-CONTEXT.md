@@ -396,3 +396,45 @@ Three findings that should change how the stack is used:
 - **A cleanup glob ate the task suite.** `Remove-Item bench\eval-*.json` matched `eval-suite-v1.json`
   and deleted the 36 items. The suite is now `bench/capability-suite-v1.json`, which no result glob
   matches, and `llm-selftest.ps1` checks it parses, has unique ids and gives every code item tests.
+
+## 11. Depth: does the window stay fast when it is full? (2026‑11‑12 21:56)
+
+The context ceilings from §7 were measured on an empty window, and so was every t/s figure in this
+project. That is a statement about a configuration, not about a session: attention reads more bytes
+per token the more tokens are already in the cache.
+
+`bin/llm-stability.ps1` (new) fills each preset to 25 % and 60 % of its own `Ctx` and reads decode
+speed from `timings.predicted_per_second` with `cache_prompt: false`; 7 models, 44 rows in
+`llm/bench/stability-at-depth.csv`. The 512-token baseline is taken **before and after** the deep
+runs and every ratio uses the mean of the two, because this laptop's clock drifts 8–16 % in five
+minutes (1627 MHz idle, ~2500 MHz under load at 68 °C, 2287 MHz at 75 °C). `bin/llm-stability-report.ps1`
+rebuilds the table from the CSV with no GPU, so no digit in the documents is hand-typed.
+
+| model | window | empty | 60 % of window | verdict |
+|---|---|---|---|---|
+| `gptoss` | 24576 | 27.4 t/s | 14718 tok → **25.5** t/s (93 %) | holds |
+| `coder36` | 32768 | 40.0 t/s | 19594 tok → **37.1** t/s (93 %) | holds |
+| `qwen36` | 20480 | 38.4 t/s | 12259 tok → **29.7** t/s (77 %, 85 % vs the post-run clock) | softens |
+| `flint` | 49152 | 34.3 t/s | 29370 tok → **28.9** t/s (84 %) | softens |
+| `qwen3` | 16384 | 53.2 t/s | 9813 tok → **43.6** t/s (82 %) | softens |
+| `coder` | 32768 | 61.2 t/s | 19614 tok → **48.9** t/s (80 %) | softens |
+| `gemma4` | 131072 | 84.8 t/s | 78291 tok → **52.7** t/s (62 %) | breaks near the top |
+
+**Nothing in the registry changed**: every `Ctx` still loads, answers and holds a usable speed. What
+changed is the guidance — `gemma4` at 32k for interactive work, 131k for one-shot long-document
+passes; the MoE models are flat enough to use their whole window.
+
+Two tool defects surfaced and are fixed (details in `GUIDE.md` §10, traps 21–22 and `progress.md`
+bug 11–12):
+
+1. `serve-model.ps1` re-derived `--n-cpu-moe` from the GGUF geometry for a registry key — flint was
+   served at 38 instead of 40, which loads at 16384 and cannot serve its 49152 window. Registry keys
+   now inherit `Ctx`, `CpuMoe`, `Threads`, `Port`, `Alias`; geometry is only for unknown files.
+2. `llm-server.ps1` warned about a "19.7 GB KV cache" for gemma-4 at 131072 from a 7B-calibrated
+   constant; the real cost is 2.3 GB, because five of six layers are sliding-window. `llm-plan.ps1`
+   now reports `KvBytesPerToken` from the header (with its source), and the warning may not contradict
+   a window the registry already serves.
+
+**Open:** `Ctx` is a ceiling, not a recommendation. The evidence argues for a second field
+(`CtxComfort`, the point where decode is still ≥ 80 %), but nobody has decided the cut, and the
+launcher would have to honour it.

@@ -1,0 +1,198 @@
+[
+  {
+    "key": "coder",
+    "model": "qwen2.5-coder-7b",
+    "window": 32768,
+    "shallow": 61.2,
+    "pre": 61.6,
+    "post": 60.8,
+    "drift": -1.3,
+    "depths": [
+      {
+        "label": "depth-25pct",
+        "tokens": 8205,
+        "tps": 52.4,
+        "prefill": 2355.4,
+        "pct": 85.6,
+        "verdict": "softened"
+      },
+      {
+        "label": "depth-60pct",
+        "tokens": 19614,
+        "tps": 48.9,
+        "prefill": 2013.3,
+        "pct": 79.9,
+        "verdict": "softened"
+      }
+    ],
+    "verdict": "softened/softened"
+  },
+  {
+    "key": "coder36",
+    "model": "qwen3.6-27b-a3b-coder",
+    "window": 32768,
+    "shallow": 40.0,
+    "pre": 38.2,
+    "post": 41.8,
+    "drift": 9.4,
+    "depths": [
+      {
+        "label": "depth-25pct",
+        "tokens": 8186,
+        "tps": 38.1,
+        "prefill": 444.5,
+        "pct": 95.2,
+        "verdict": "kept"
+      },
+      {
+        "label": "depth-60pct",
+        "tokens": 19594,
+        "tps": 37.1,
+        "prefill": 393.7,
+        "pct": 92.8,
+        "verdict": "kept"
+      }
+    ],
+    "verdict": "kept/kept"
+  },
+  {
+    "key": "flint",
+    "model": "flint-nvfp4-40b",
+    "window": 49152,
+    "shallow": 34.3,
+    "pre": 34.1,
+    "post": 34.5,
+    "drift": 1.2,
+    "depths": [
+      {
+        "label": "depth-25pct",
+        "tokens": 12252,
+        "tps": 29.6,
+        "prefill": 191.4,
+        "pct": 86.3,
+        "verdict": "softened"
+      },
+      {
+        "label": "depth-60pct",
+        "tokens": 29370,
+        "tps": 28.9,
+        "prefill": 219.3,
+        "pct": 84.3,
+        "verdict": "softened"
+      }
+    ],
+    "verdict": "softened/softened"
+  },
+  {
+    "key": "gemma4",
+    "model": "gemma-4-e4b",
+    "window": 131072,
+    "shallow": 84.8,
+    "pre": 81.5,
+    "post": 88.0,
+    "drift": 8.0,
+    "depths": [
+      {
+        "label": "depth-25pct",
+        "tokens": 32646,
+        "tps": 68.4,
+        "prefill": 2907.7,
+        "pct": 80.7,
+        "verdict": "softened"
+      },
+      {
+        "label": "depth-60pct",
+        "tokens": 78291,
+        "tps": 52.7,
+        "prefill": 2083.6,
+        "pct": 62.1,
+        "verdict": "collapsed"
+      }
+    ],
+    "verdict": "softened/collapsed"
+  },
+  {
+    "key": "gptoss",
+    "model": "gpt-oss-20b",
+    "window": 24576,
+    "shallow": 27.4,
+    "pre": 27.0,
+    "post": 27.8,
+    "drift": 3.0,
+    "depths": [
+      {
+        "label": "depth-25pct",
+        "tokens": 6159,
+        "tps": 27.2,
+        "prefill": 760.5,
+        "pct": 99.3,
+        "verdict": "kept"
+      },
+      {
+        "label": "depth-60pct",
+        "tokens": 14718,
+        "tps": 25.5,
+        "prefill": 629.7,
+        "pct": 93.1,
+        "verdict": "kept"
+      }
+    ],
+    "verdict": "kept/kept"
+  },
+  {
+    "key": "qwen3",
+    "model": "qwen3-8b",
+    "window": 16384,
+    "shallow": 53.2,
+    "pre": 53.0,
+    "post": 53.5,
+    "drift": 0.9,
+    "depths": [
+      {
+        "label": "depth-25pct",
+        "tokens": 4108,
+        "tps": 48.4,
+        "prefill": 2326.3,
+        "pct": 91.0,
+        "verdict": "kept"
+      },
+      {
+        "label": "depth-60pct",
+        "tokens": 9813,
+        "tps": 43.6,
+        "prefill": 2090.7,
+        "pct": 82.0,
+        "verdict": "softened"
+      }
+    ],
+    "verdict": "kept/softened"
+  },
+  {
+    "key": "qwen36",
+    "model": "qwen3.6-35b-a3b",
+    "window": 20480,
+    "shallow": 38.4,
+    "pre": 41.7,
+    "post": 35.0,
+    "drift": -16.1,
+    "depths": [
+      {
+        "label": "depth-25pct",
+        "tokens": 5127,
+        "tps": 38.9,
+        "prefill": 154.8,
+        "pct": 101.3,
+        "verdict": "kept"
+      },
+      {
+        "label": "depth-60pct",
+        "tokens": 12259,
+        "tps": 29.7,
+        "prefill": 324.9,
+        "pct": 77.3,
+        "verdict": "softened"
+      }
+    ],
+    "verdict": "kept/softened"
+  }
+]

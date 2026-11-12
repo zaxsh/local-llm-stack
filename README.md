@@ -751,12 +751,59 @@ card, found by trial load — not by arithmetic:
 | `qwen3` | 16384 | 40960 | 59.0 t/s | — (20480 will not load) |
 
 To move a value: edit `Ctx` for that row, then
-
 ```powershell
 .\llm-desktop.ps1 -SkipBinaries   # regenerates presets\*.cmd + START HERE.cmd
 .\llm-direct.ps1                  # rebuilds llama-direct.exe
 .\llm-verify-bundle.ps1           # proves every preset still loads and answers
 ```
+
+### Does it stay fast with the window full?
+
+A ceiling is worth nothing if decode speed dies while you use it. Every tokens/s figure in this
+repo above this point was taken on a **short prompt** — an empty window. Attention cost grows with
+the tokens already in the cache, so "44 t/s at 32k" was a claim about an *empty* 32k window.
+
+`bin\llm-stability.ps1` fills the window on purpose and reads `timings.predicted_per_second` back
+from the server, with `cache_prompt: false` so nothing is reused between runs. The 512-token case
+is measured **twice** — before and after the deep runs — because this laptop throttles (1627 MHz
+idle, 2300-2600 MHz under load, 68-77 °C) and a deep run compared against whichever bookend
+happened to be colder invents a loss that has nothing to do with context. The denominator below is
+the mean of the two bookends; the drift column is how far apart they were.
+
+Measured 2026-11-12, `bench\stability-at-depth.csv`, regenerate with
+`.\bin\llm-stability-report.ps1 -Markdown`:
+
+| model | window | empty (512) | 25 % of window | 60 % of window | clock drift | verdict |
+|---|---|---|---|---|---|---|
+| gemma4 | 131072 | 84.8 t/s | 32646 tok -> **68.4** t/s (81 %) | 78291 tok -> **52.7** t/s (62 %) | +8 % | softened/collapsed |
+| coder | 32768 | 61.2 t/s | 8205 tok -> **52.4** t/s (86 %) | 19614 tok -> **48.9** t/s (80 %) | -1 % | softened/softened |
+| qwen3 | 16384 | 53.2 t/s | 4108 tok -> **48.4** t/s (91 %) | 9813 tok -> **43.6** t/s (82 %) | +1 % | kept/softened |
+| coder36 | 32768 | 40.0 t/s | 8186 tok -> **38.1** t/s (95 %) | 19594 tok -> **37.1** t/s (93 %) | +9 % | kept/kept |
+| qwen36 | 20480 | 38.4 t/s | 5127 tok -> **38.9** t/s (101 %) | 12259 tok -> **29.7** t/s (77 %) | -16 % | kept/softened |
+| flint | 49152 | 34.3 t/s | 12252 tok -> **29.6** t/s (86 %) | 29370 tok -> **28.9** t/s (84 %) | +1 % | softened/softened |
+| gptoss | 24576 | 27.4 t/s | 6159 tok -> **27.2** t/s (99 %) | 14718 tok -> **25.5** t/s (93 %) | +3 % | kept/kept |
+
+Verdicts are against the midpoint bookend: `kept` ≥ 90 %, `softened` 75-90 %, `collapsed` < 75 %.
+
+What the table says:
+
+* **The MoE models barely notice.** `gptoss` keeps 99 % / 93 %, `coder36` 95 % / 93 %. A sparse
+  model reads few expert bytes per token and its KV footprint per token is small (gpt-oss 24.6 KB,
+  qwen3.6 42 KB at f16), so filling the window is close to free.
+* **`gemma4` is the one that pays, and only near the top.** 81 % at 32k, 62 % at 78k. The 131072
+  window is real — it loads and answers — but the last third of it costs a third of the speed. Use
+  32768 interactively, 131072 for one-shot long-document passes.
+* **`flint` and `coder` soften by 15-20 %** and stay perfectly usable; `flint` at 29k tokens is
+  still 28.9 t/s with 21 GB of experts paging over PCIe.
+* **`qwen36`'s −16 % is the machine, not the model.** It ran last on the hottest machine of the
+  sweep; against the post-run bookend it is 85 %, not 77 %, which is the honest number.
+* These are 5-12 % above the `bench\bundle-verify.csv` figures in the ceiling table because that
+  harness counts an end-to-end HTTP round trip and tokenisation; this one reads the server's own
+  decode timer. Same direction, different quantity.
+
+Prefill is not linear either. gemma4 swallows 78291 tokens at 2084 t/s (38 s), but `flint` pages
+29370 tokens at 219 t/s (134 s) and `qwen36` 12259 at 325 t/s — on an expert-split model the first
+prompt of a long session is the slow part, not the answer.
 
 ### How to find the ceiling yourself
 

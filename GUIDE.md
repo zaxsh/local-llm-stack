@@ -129,7 +129,14 @@ No number in this repository came from a spec sheet or an estimate. The protocol
 4. **Capability** - `llm-eval.ps1` runs 36 items over eight categories and grades every one by program
    (exact value, regex, JSON schema, or *executing* unit tests). No judge model. The grader is tested
    against its own gold answers before any model runs, and CI re-tests it on every push.
-5. Everything lands in `bench/*.csv` and `bench/eval-*.json`. If a number is in the README, there is a file
+5. **Depth** — `llm-stability.ps1` fills the window to 25 % and 60 % of that model's `Ctx` and
+   reads decode t/s from the server's own `timings.predicted_per_second` with `cache_prompt: false`.
+   The 512-token baseline is measured **before and after** the deep runs and every ratio is taken
+   against the midpoint, because the clock on this laptop moves 8-16 % in five minutes and a deep
+   run compared to whichever bookend was colder invents a depth penalty (or a depth bonus) that is
+   not there. `llm-stability-report.ps1 -Markdown` rebuilds the README table from the CSV without
+   a GPU and without a hand-typed digit.
+6. Everything lands in `bench/*.csv` and `bench/eval-*.json`. If a number is in the README, there is a file
    behind it.
 
 **Never** quote `/health` as proof that a model works, and never extrapolate a context ceiling from
@@ -226,7 +233,7 @@ Both are instances of the same lesson: **one source of truth, or the copies drif
 ## 8. The state of the repository right now, and how to re-verify it
 
 Seven models, all measured, all in the registry, the catalogue, `presets\`, the launcher and the
-README. `main` is released as **v1.1.0**.
+README. `main` is released as **v1.2.0**; the depth-stability pass of 2026-11-12 is on top of it.
 
 ```powershell
 cd C:\Users\fih\llm
@@ -237,6 +244,10 @@ pwsh -NoProfile -File .\bin\llm-selftest.ps1        # 7 checks: scripts, registr
 # does the model actually work, end to end, including a tool call?
 pwsh -NoProfile -File .\bin\llm-verify-bundle.ps1
 
+# does it still hold its speed with the window full? (~16 min, loads all seven)
+pwsh -NoProfile -File .\bin\llm-stability.ps1
+pwsh -NoProfile -File .\bin\llm-stability-report.ps1 -Markdown   # table from the CSV, no GPU
+
 # what does the launcher see?
 & "$env:USERPROFILE\Desktop\Local-LLM-Project\llama-direct.exe" --list
 
@@ -246,7 +257,8 @@ pwsh -NoProfile -File .\bin\llm-ctxgrow.ps1 -Model <key> -Candidates '28672,3276
 ```
 
 `bench\` holds the CSVs behind every one of those numbers: `ncmoe-coder36.csv`,
-`ncmoe-coder36-at-28k.csv`, `ncmoe-coder36-at-32k.csv`, `ctxgrow-coder36.csv`, `maxctx-coder36.csv`.
+`ncmoe-coder36-at-28k.csv`, `ncmoe-coder36-at-32k.csv`, `ctxgrow-coder36.csv`, `maxctx-coder36.csv`,
+`stability-at-depth.csv`.
 
 **Open, in priority order:**
 
@@ -257,6 +269,10 @@ pwsh -NoProfile -File .\bin\llm-ctxgrow.ps1 -Model <key> -Candidates '28672,3276
 3. Whether `--reasoning-budget` should become a preset default. It halved wall time on a coding
    prompt; it also removes thinking the model might have needed. That is a judgement call, not a
    measurement.
+4. **`Ctx` is a ceiling, not a recommendation.** The depth sweep shows gemma4 at 62 % of its empty
+   speed at 78k tokens while `gptoss` and `coder36` do not move. That argues for a second field —
+   `CtxComfort` — per model, chosen as the point where decode is still ≥ 80 %. Nobody has decided
+   where that cut belongs, and the launcher would have to honour it.
 ## 9. Adding the eighth model (the recipe, generalised)
 
 1. **Is the repo public?** `curl -s https://huggingface.co/api/models/<repo>?blobs=true` → `gated`,
@@ -337,6 +353,20 @@ Each of these cost real time. Do not rediscover them.
     and a `[string]` parameter throws "cannot convert System.Object[]"; call it through `pwsh -File`
     and the same parameter arrives as one string. Declare `[string[]]` and normalise with
     `($P -join ',') -split '[,\s]+'` so both call styles work.
+21. **A launcher that re-derives tuned flags serves something the registry never measured.**
+    `serve-model.ps1` took a registry key, then derived `--n-cpu-moe` from the GGUF geometry instead
+    of from the registry: flint was served at **38** where the repository says **40**, which loads at
+    16384 and cannot serve its own 49152 window. Nothing failed at launch — the stability run simply
+    sat on a dead port until a timeout. Registry keys now inherit `Ctx`, `CpuMoe`, `Threads`, `Port`
+    and `Alias`; derivation is only for models the registry has never seen. The stability harness
+    now parses the served `ncmoe=`/`ctx=` back out of the launch log and complains if it disagrees.
+22. **A hardcoded KV estimate is a guess with a decimal point.** `llm-server.ps1` carried
+    `1.5e-4 GB/token`, calibrated on a 36-layer, 8-KV-head 7B, and warned that gemma-4 needed
+    "3.9 GB + KV 19.7 GB" at 131072 — where it really costs **2.3 GB** and loads in 13 s, because
+    five of every six of its layers are sliding-window and never keep the full cache. Two fixes:
+    read the geometry from the header (`llm-plan.ps1` now reports `KvBytesPerToken` and where it came
+    from), and let measurement outrank arithmetic — if the registry already serves that file at that
+    context, the estimate is not allowed to say it will not fit.
 
 ## 11. House rules (how this repository is written)
 

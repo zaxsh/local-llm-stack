@@ -288,6 +288,52 @@ verdicts), `bench/eval-summary.csv`, `docs/capability-evaluation.md`. CI now run
 
 ---
 
+## Phase 7 — does the window still hold its speed? (21:20 → 21:56)
+
+Phase 3 widened every preset to the largest context that *loads and finishes a generation*. But every
+tokens/s figure in this repository up to tonight was taken on an **empty** window — a 41-token prompt
+into a 131072-token context. That describes the cache size, not the speed at that cache size, and
+attention cost grows with the tokens in front of it. "44 t/s at 32k" was a promise about a 32k
+window, not about 32k *of context*.
+
+`bin\llm-stability.ps1` fills the window to 25 % and 60 % of each model's own `Ctx`, then reads
+decode speed out of the server's `timings.predicted_per_second` with `cache_prompt: false` — 200
+decode tokens per measurement, seven models, 44 rows in `bench\stability-at-depth.csv`.
+
+Two protocol mistakes cost a rerun each, and both were the kind that produce a *plausible* table:
+
+- The first version measured the 512-token baseline once, before the deep work. The clock on this
+  laptop moves **8-16 % in five minutes** (2500 MHz at 68 °C, 2287 MHz at 75 °C, 1627 MHz idle), so
+  a deep run compared against a single cold bookend reports a depth penalty that is partly the room
+  heating up. Every ratio now uses the mean of a **before and after** baseline, and the drift is
+  printed next to it.
+- The first full run served flint at `--n-cpu-moe 38` instead of the registry's **40**, because
+  `serve-model.ps1` re-derived the split from the GGUF geometry instead of reading the registry. It
+  loads at 16384 and cannot serve its own 49152 window, so the sweep sat on a dead port until a
+  timeout. (Bug 11.)
+
+Result — sparse models do not care, the one dense-window model does:
+
+| model | window | empty (512) | 25 % of window | 60 % of window | clock drift | verdict |
+|---|---|---|---|---|---|---|
+| gemma4 | 131072 | 84.8 t/s | 32646 tok -> **68.4** t/s (81 %) | 78291 tok -> **52.7** t/s (62 %) | +8 % | softened/collapsed |
+| coder | 32768 | 61.2 t/s | 8205 tok -> **52.4** t/s (86 %) | 19614 tok -> **48.9** t/s (80 %) | -1 % | softened/softened |
+| qwen3 | 16384 | 53.2 t/s | 4108 tok -> **48.4** t/s (91 %) | 9813 tok -> **43.6** t/s (82 %) | +1 % | kept/softened |
+| coder36 | 32768 | 40.0 t/s | 8186 tok -> **38.1** t/s (95 %) | 19594 tok -> **37.1** t/s (93 %) | +9 % | kept/kept |
+| qwen36 | 20480 | 38.4 t/s | 5127 tok -> **38.9** t/s (101 %) | 12259 tok -> **29.7** t/s (77 %) | -16 % | kept/softened |
+| flint | 49152 | 34.3 t/s | 12252 tok -> **29.6** t/s (86 %) | 29370 tok -> **28.9** t/s (84 %) | +1 % | softened/softened |
+| gptoss | 24576 | 27.4 t/s | 6159 tok -> **27.2** t/s (99 %) | 14718 tok -> **25.5** t/s (93 %) | +3 % | kept/kept |
+
+`gptoss` and `coder36` barely move; `gemma4` loses a third of its speed in the top third of its
+window; `flint` pays 15 % to run 21 GB of experts over PCIe with 29k tokens in the cache. `qwen36`'s
+−16 % drift is the machine (it ran last, hottest) — against the post-run bookend it is 85 %.
+
+Nothing in the registry changed: every `Ctx` value still loads, answers and holds a usable speed.
+What changed is that the documentation now says *which* end of the window is cheap, and §14 of the
+README is generated from the CSV by `bin\llm-stability-report.ps1 -Markdown` instead of typed.
+
+---
+
 ## The bug ledger
 
 Every one of these was found by *using* the thing, not by reading it.
@@ -307,6 +353,16 @@ Every one of these was found by *using* the thing, not by reading it.
 9. `Select-String -SimpleMatch 'C:\\Users\\fih'` returns false negatives — the pattern is literal.
 10. A `Get-CimInstance | Where CommandLine -like '*script*'` filter killed the shell running it;
     always exclude `$PID`.
+11. `serve-model.ps1` re-derived `--n-cpu-moe` from the GGUF geometry for a model the registry had
+    already tuned — flint was served at 38 instead of 40, which loads at 16384 and dies at 49152.
+    Found because a stability run sat on a dead port. Registry keys now inherit `Ctx`, `CpuMoe`,
+    `Threads`, `Port`, `Alias`; derivation is only for unknown files, and the harness parses the
+    served flags back out of the launch log to prove it.
+12. `llm-server.ps1` carried a hardcoded KV cost (150 KB/token, calibrated on a 7B) and warned that
+    gemma-4 needed "3.9 GB + KV 19.7 GB" at 131072 — where the real cost is **2.3 GB** and the model
+    loads in 13 s, because five of every six layers are sliding-window. `llm-plan.ps1` now reads the
+    attention geometry from the header and reports `KvBytesPerToken` with its source, and the warning
+    is no longer allowed to contradict a window the registry already serves.
 
 ---
 
@@ -327,6 +383,12 @@ Seven models, every one measured on this machine, in the registry that generates
 The end-to-end proof (`llm-verify-bundle.ps1`, 300 tokens each, tool call, GPU released): gemma4 74.5,
 coder 52.0, qwen3 58.9, coder36 40.5, qwen36 38.6, gptoss 30.7, flint 29.3 t/s.
 
+With the window **full** (`llm-stability.ps1`, 2026-11-12, `bench\stability-at-depth.csv`): at 60 %
+of each window `gptoss` 93 %, `coder36` 93 %, `qwen36` 77 % (85 % against the post-run clock),
+`flint` 84 %, `qwen3` 82 %, `coder` 80 %, `gemma4` 62 %. The MoE models are flat because their KV
+footprint per token is small; `gemma4` pays for the top third of its 131k window. Phase 7 is the
+record.
+
 ---
 
 ## What is left
@@ -345,6 +407,10 @@ coder 52.0, qwen3 58.9, coder36 40.5, qwen36 38.6, gptoss 30.7, flint 29.3 t/s.
 5. **`coder` and `gptoss` report no tool calls.** llama.cpp's documentation lists both *Qwen 2.5
    Coder* and *GPT-OSS/Harmony* as native tool-call formats, so this may be a template or `--jinja`
    issue rather than a model limit — worth re-testing before repeating the claim.
+6. **`Ctx` is a ceiling, not a recommendation.** Phase 7 shows `gemma4` at 62 % of its empty speed at
+   78k tokens while `gptoss` and `coder36` do not move. The obvious fix is a `CtxComfort` field per
+   model — the point where decode is still ≥ 80 % — but the cut is a judgement call and the launcher,
+   the presets and the dsh routes would all have to honour it. Not started.
 
 ---
 

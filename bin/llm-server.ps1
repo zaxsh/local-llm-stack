@@ -235,16 +235,51 @@ if ($Backend -in 'cuda', 'vulkan') {
         $m = & $smi --query-gpu=memory.total --format=csv,noheader,nounits 2>$null
         if ($m -and $m -match '^\d+') { $vramGB = [double]$m / 1024 }
     }
-    # GB per token, calibrated on a ~36-layer GQA model (8 KV heads, head_dim 128).
-    $kvPerTok = switch ($CacheK) { 'f16' { 1.5e-4 } 'q8_0' { 8.0e-5 } 'q4_0' { 4.2e-5 } default { 8.0e-5 } }
-    $kvGB = $kvPerTok * $Ctx
+    # KV bytes per token, read from the model's own attention geometry. The previous constant was
+    # calibrated on a 36-layer / 8-KV-head 7B and overstated small-KV architectures by ~8x: it
+    # printed "3.9 GB + KV 19.7 GB" for gemma-4 at ctx 131072, which really costs 2.3 GB and loads.
+    $kvPerTok = 0.0
+    $planner = Join-Path $PSScriptRoot 'llm-plan.ps1'
+    if (Test-Path $planner) {
+        $pj = pwsh -NoProfile -File $planner -Model $Model -Ctx $Ctx -CacheK $CacheK -Json 2>$null |
+            Where-Object { $_ -like '{*' } | ConvertFrom-Json
+        if ($pj -and $pj.KvBytesPerToken -gt 0) { $kvPerTok = [double]$pj.KvBytesPerToken }
+    }
+    if ($kvPerTok -le 0) {
+        $kb = switch ($CacheK) { 'f16' { 150.0 } 'q8_0' { 80.0 } 'q4_0' { 42.0 } default { 80.0 } }
+        $kvPerTok = $kb * 1024
+    }
+    $kvGB = $kvPerTok * $Ctx / 1GB
     $need = $modelGB + $kvGB
+
+    # Evidence beats arithmetic. If the registry already serves this exact file at this context,
+    # the window is measured, not estimated - so an estimate that says "will not fit" is wrong by
+    # definition. This is what kept warning about gemma-4 at 131072, where the geometric figure is
+    # ~5x too high because 5 of every 6 layers are sliding-window and never keep the full cache.
+    $proven = $false
+    $registry = Join-Path $PSScriptRoot 'llm-up.ps1'
+    if (Test-Path $registry) {
+        $rt = Get-Content $registry -Raw
+        $base = [regex]::Escape([IO.Path]::GetFileName($Model))
+        foreach ($mm in [regex]::Matches($rt, "(?m)^\s*(?<k>\w+)\s*=\s*@\{(?<b>[^}]*)\}")) {
+            $body = $mm.Groups['b'].Value
+            if ($body -notmatch ("File\s*=\s*'" + $base + "'")) { continue }
+            $cm = [regex]::Match($body, 'Ctx\s*=\s*(\d+)')
+            if ($cm.Success -and [int]$cm.Groups[1].Value -ge $Ctx) { $proven = $mm.Groups['k'].Value }
+        }
+    }
+
     if ($need -gt ($vramGB - 0.5)) {
-        Write-Host ("  ! model {0:N1} GB + KV {1:N1} GB (ctx {2}) > {3:N1} GB VRAM - layers will spill to DDR5." -f $modelGB, $kvGB, $Ctx, $vramGB) -ForegroundColor Yellow
-        if ($CpuMoe -gt 0) {
-            Write-Host "    MoE split requested, so only the expert tensors go to RAM - fine." -ForegroundColor DarkYellow
+        if ($proven) {
+            Write-Host ("  note: model {0:N1} GB + est. KV {1:N1} GB > {2:N1} GB, but '{3}' already serves this window - measured, so loading." -f $modelGB, $kvGB, $vramGB, $proven) -ForegroundColor DarkGray
         } else {
-            Write-Host "    MoE model? add -CpuMoe 20-40. Dense? shrink -Ctx, use -CacheK q4_0, or a smaller quant." -ForegroundColor Yellow
+            Write-Host ("  ! model {0:N1} GB + KV ~{1:N1} GB (ctx {2}) > {3:N1} GB VRAM - layers will spill to DDR5." -f $modelGB, $kvGB, $Ctx, $vramGB) -ForegroundColor Yellow
+            Write-Host "    (KV is estimated from attention geometry; sliding-window models cost less.)" -ForegroundColor DarkYellow
+            if ($CpuMoe -gt 0) {
+                Write-Host "    MoE split requested, so only the expert tensors go to RAM - fine." -ForegroundColor DarkYellow
+            } else {
+                Write-Host "    MoE model? add -CpuMoe 20-40. Dense? shrink -Ctx, use -CacheK q4_0, or a smaller quant." -ForegroundColor Yellow
+            }
         }
     }
 }

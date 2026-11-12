@@ -54,6 +54,9 @@ using System.Globalization;
 public class GgufInfo {
   public string Arch = "?";
   public int Blocks, ExpertCount, ExpertUsed, Emb, ExpertFfn, Align = 32;
+  // KV geometry: bytes of cache one token costs is Blocks * HeadCountKv * (KeyLength + ValueLength)
+  // * bytes-per-element. Without these the launcher had to guess from a 7B-shaped constant.
+  public int HeadCountKv, KeyLength, ValueLength;
   public long FileBytes, TotalParams, ExpertBytes, NonExpertBytes;
   public int ExpertLayers;
   public double BPW;
@@ -99,7 +102,9 @@ public static class GgufReader {
           if (k == "general.architecture" && t == 8) { info.Arch = RStr(); continue; }
           if (k == "general.alignment" && scalar) { info.Align = (int)br.ReadUInt32(); continue; }
           if (scalar && (k.EndsWith(".block_count") || k.EndsWith(".expert_count") || k.EndsWith(".expert_used_count")
-                      || k.EndsWith(".embedding_length") || k.EndsWith(".expert_feed_forward_length"))) {
+                      || k.EndsWith(".embedding_length") || k.EndsWith(".expert_feed_forward_length")
+                      || k.EndsWith(".attention.head_count_kv") || k.EndsWith(".attention.key_length")
+                      || k.EndsWith(".attention.value_length"))) {
             long v = 0;
             switch (t) {
               case 4: v = br.ReadUInt32(); break;
@@ -113,6 +118,9 @@ public static class GgufReader {
             else if (k.EndsWith(".expert_used_count")) info.ExpertUsed = (int)v;
             else if (k.EndsWith(".embedding_length")) info.Emb = (int)v;
             else if (k.EndsWith(".expert_feed_forward_length")) info.ExpertFfn = (int)v;
+            else if (k.EndsWith(".attention.head_count_kv")) info.HeadCountKv = (int)v;
+            else if (k.EndsWith(".attention.key_length")) info.KeyLength = (int)v;
+            else if (k.EndsWith(".attention.value_length")) info.ValueLength = (int)v;
             continue;
           }
           SkipVal(t);
@@ -199,7 +207,21 @@ if ($VramGB -le 0) {
 # headroom: CUDA context + compute/graph buffers. The desktop's own VRAM use is already
 # excluded, because the budget is based on FREE memory.
 $overheadGB = if ($VramGB -lt 7.5) { 0.45 } else { 0.9 }
-$kvPerTok = if ($CacheK -eq 'q8_0') { 26000.0 } elseif ($CacheK -eq 'q4_0') { 14000.0 } else { 49000.0 }
+# KV bytes per token: exact when the header carries the attention geometry, otherwise the old
+# dense-7B calibration. The calibration is 3-8x too high for small-KV architectures (gemma-4 is
+# 17 KB/token, the constant claimed 150 KB), which is how the launcher came to warn about a
+# "19.7 GB KV cache" on a model that occupies 2.3 GB and loads in 13 s.
+$kvElemBytes = switch ($CacheK) { 'f16' { 2.0 } 'q8_0' { 1.0 } 'q4_0' { 0.5 } default { 1.0 } }
+$kvBytesPerToken = 0.0
+if ($i.Blocks -gt 0 -and $i.HeadCountKv -gt 0 -and ($i.KeyLength + $i.ValueLength) -gt 0) {
+    $kvBytesPerToken = $i.Blocks * $i.HeadCountKv * ($i.KeyLength + $i.ValueLength) * $kvElemBytes
+}
+$kvSource = 'measured geometry'
+if ($kvBytesPerToken -le 0) {
+    $kvBytesPerToken = if ($CacheK -eq 'q8_0') { 26000.0 } elseif ($CacheK -eq 'q4_0') { 14000.0 } else { 49000.0 }
+    $kvSource = 'fallback constant'
+}
+$kvPerTok = $kvBytesPerToken
 $kvGB = $kvPerTok * $Ctx / 1GB
 $budget = $VramGB - $overheadGB - $kvGB
 
@@ -229,6 +251,11 @@ if ($Json) {
         Bpw             = [math]::Round($i.BPW, 2)
         VramGB          = [math]::Round($VramGB, 2)
         KvGB            = [math]::Round($kvGB, 2)
+        KvBytesPerToken = [int]$kvBytesPerToken
+        KvSource        = $kvSource
+        HeadCountKv     = $i.HeadCountKv
+        KeyLength       = $i.KeyLength
+        ValueLength     = $i.ValueLength
         BudgetGB        = [math]::Round($budget, 2)
         Fits            = $jFits
         FullVram        = ($jShare -ge 0.999)

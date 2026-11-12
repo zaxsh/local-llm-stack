@@ -27,13 +27,13 @@ $modelsDir = (Join-Path (Split-Path $PSScriptRoot -Parent) 'models')
 # name -> file, port, alias, and the flags that were actually measured to be best.
 # Update this table (not the routes) when a model is replaced.
 $registry = [ordered]@{
-    gemma4  = @{ File = 'gemma-4-E4B-it-q4kxl.gguf';  Port = 8083; Alias = 'gemma-4-e4b';       Ctx = 131072; CpuMoe = 0;  Threads = 20; Note = '4B dense Gemma 4, 74.1 t/s at full 131k ctx, native tool calls - best agent default' }
-    flint   = @{ File = 'flint-nvfp4-40b.gguf';       Port = 8080; Alias = 'flint-nvfp4-40b';   Ctx = 49152; CpuMoe = 40; Threads = 16; Note = '40B MoE, 29.8 t/s, max ctx 49152' }
-    qwen3   = @{ File = 'Qwen3-8B-Q4_K_M.gguf';       Port = 8081; Alias = 'qwen3-8b';          Ctx = 16384; CpuMoe = 0;  Threads = 20; Note = '8B dense, 59.0 t/s, max ctx 16384 (20480 OOM)' }
-    coder   = @{ File = 'qwen2.5-coder-7b-q4km.gguf'; Port = 8081; Alias = 'qwen2.5-coder-7b';  Ctx = 32768; CpuMoe = 0;  Threads = 20; Note = '7B dense coder, 50.3 t/s at full 32768 ctx, no native tools' }
-    gptoss  = @{ File = 'gpt-oss-20b-MXFP4.gguf';     Port = 8082; Alias = 'gpt-oss-20b';       Ctx = 24576; CpuMoe = 14; Threads = 20; Note = '20B MoE, 30.8 t/s at max ctx 24576 (32768 OOM at ncmoe 14); no native tools' }
-    coder36 = @{ File = 'qwen3.6-27b-a3b-coder-q4km.gguf'; Port = 8085; Alias = 'qwen3.6-27b-a3b-coder'; Ctx = 32768; CpuMoe = 26; Threads = 16; Note = '27B MoE coder (3B active), 44.4 t/s at max ctx 32768; n-cpu-moe 26 is both the floor (24 is a CUDA OOM) and the fastest; native tool calls; thinks first (docs for the flags)' }
-  qwen36  = @{ File = 'qwen3.6-35b-a3b-mtp-q4km.gguf'; Port = 8084; Alias = 'qwen3.6-35b-a3b'; Ctx = 20480; CpuMoe = 30; Threads = 16; Note = '35B MoE 8/256 experts, 34.0 t/s at max ctx 20480 (24576 loads but cannot complete); native tools' }
+    gemma4  = @{ File = 'gemma-4-E4B-it-q4kxl.gguf';  Port = 8083; Alias = 'gemma-4-e4b';       Ctx = 131072; CpuMoe = 0;  Threads = 20; Note = '4B dense Gemma 4, 74.1 t/s at full 131k ctx, native tool calls - best agent default; keeps 62 % of its speed at 78k tok' }
+    flint   = @{ File = 'flint-nvfp4-40b.gguf';       Port = 8080; Alias = 'flint-nvfp4-40b';   Ctx = 49152; CpuMoe = 40; Threads = 16; Note = '40B MoE, 29.8 t/s, max ctx 49152; keeps 84 % at 29k tok' }
+    qwen3   = @{ File = 'Qwen3-8B-Q4_K_M.gguf';       Port = 8081; Alias = 'qwen3-8b';          Ctx = 16384; CpuMoe = 0;  Threads = 20; Note = '8B dense, 59.0 t/s, max ctx 16384 (20480 OOM); keeps 82 % at 9800 tok' }
+    coder   = @{ File = 'qwen2.5-coder-7b-q4km.gguf'; Port = 8081; Alias = 'qwen2.5-coder-7b';  Ctx = 32768; CpuMoe = 0;  Threads = 20; Note = '7B dense coder, 50.3 t/s at full 32768 ctx, no native tools; keeps 80 % at 19k tok' }
+    gptoss  = @{ File = 'gpt-oss-20b-MXFP4.gguf';     Port = 8082; Alias = 'gpt-oss-20b';       Ctx = 24576; CpuMoe = 14; Threads = 20; Note = '20B MoE, 30.8 t/s at max ctx 24576 (32768 OOM at ncmoe 14); no native tools; keeps 93 % at 15k tok' }
+    coder36 = @{ File = 'qwen3.6-27b-a3b-coder-q4km.gguf'; Port = 8085; Alias = 'qwen3.6-27b-a3b-coder'; Ctx = 32768; CpuMoe = 26; Threads = 16; Note = '27B MoE coder (3B active), 44.4 t/s at max ctx 32768; n-cpu-moe 26 is both the floor (24 is a CUDA OOM) and the fastest; native tool calls; thinks first (docs for the flags); keeps 93 % at 20k tok' }
+  qwen36  = @{ File = 'qwen3.6-35b-a3b-mtp-q4km.gguf'; Port = 8084; Alias = 'qwen3.6-35b-a3b'; Ctx = 20480; CpuMoe = 30; Threads = 16; Note = '35B MoE 8/256 experts, 34.0 t/s at max ctx 20480 (24576 loads but cannot complete); native tools; keeps 85 % at 12k tok' }
 }
 
 function Get-Running {

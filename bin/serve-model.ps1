@@ -37,7 +37,7 @@ param(
 
     [int]$Port = 0,                 # 0 = pick from the registry, else 8080
     [string]$Alias = '',
-    [int]$Ctx = 16384,
+    [int]$Ctx = 0,                   # 0 = the registry's Ctx for a registry key, else 16384
     [int]$GpuLayers = 99,
     [int]$CpuMoe = -1,              # -1 = derive from geometry
     [int]$Threads = 0,              # 0 = derive from geometry
@@ -139,6 +139,9 @@ if ($List -or -not $Model) {
 
 $regAlias = ''
 $regPort = 0
+$regCtx = 0
+$regCpu = -1
+$regThreads = 0
 $file = Resolve-ModelFile $Model
 if (-not $file) {
     # Not a path or an Ollama tag - maybe it is a registry key from llm-up.ps1 (gemma4, flint, ...).
@@ -151,6 +154,9 @@ if (-not $file) {
             $file = Resolve-ModelFile $Matches[1]
             if ($txt -match ("(?m)^\s*" + $key + "\s*=\s*@\{[^}]*Alias\s*=\s*'([^']+)'")) { $regAlias = $Matches[1] }
             if ($txt -match ("(?m)^\s*" + $key + "\s*=\s*@\{[^}]*Port\s*=\s*(\d+)")) { $regPort = [int]$Matches[1] }
+            if ($txt -match ("(?m)^\s*" + $key + "\s*=\s*@\{[^}]*Ctx\s*=\s*(\d+)")) { $regCtx = [int]$Matches[1] }
+            if ($txt -match ("(?m)^\s*" + $key + "\s*=\s*@\{[^}]*CpuMoe\s*=\s*(\d+)")) { $regCpu = [int]$Matches[1] }
+            if ($txt -match ("(?m)^\s*" + $key + "\s*=\s*@\{[^}]*Threads\s*=\s*(\d+)")) { $regThreads = [int]$Matches[1] }
         }
     }
 }
@@ -177,12 +183,21 @@ if (-not $NoAutoStop) {
     }
 }
 
-if ($Threads -le 0) { $Threads = if ($geo.IsMoE -and $CpuMoe -ne 0) { 16 } else { 20 } }
-if ($CpuMoe -lt 0) { $CpuMoe = if ($geo.IsMoE) { $geo.SuggestedNcmoe } else { 0 } }
-if ($Threads -le 0) { $Threads = if ($CpuMoe -gt 0) { 16 } else { 20 } }
+# A registry key means the flags were already tuned and measured for this machine, so inherit
+# them instead of re-deriving. Derivation is for models the registry has never seen.
+# (flint is the cautionary case: geometry suggests n-cpu-moe 38, the registry says 40, and 38
+# loads at 16384 but cannot serve the registry's 49152 window.)
+if ($CpuMoe -lt 0) {
+    $CpuMoe = if ($regCpu -ge 0) { $regCpu } elseif ($geo.IsMoE) { $geo.SuggestedNcmoe } else { 0 }
+}
+if ($Threads -le 0) {
+    $Threads = if ($regThreads -gt 0) { $regThreads }
+               elseif ($geo.IsMoE -or $CpuMoe -gt 0) { 16 }
+               else { 20 }
+}
+if ($Ctx -le 0) { $Ctx = if ($regCtx -gt 0) { $regCtx } else { 16384 } }
 if (-not $Alias) { $Alias = if ($regAlias) { $regAlias } else { $geo.Name -replace '\.gguf$', '' } }
 if ($Port -le 0) { $Port = if ($regPort) { $regPort } else { 8080 } }
-
 $extraArgs = @()
 if ($SpecType) {
     $extraArgs += @('--spec-type', $SpecType)
