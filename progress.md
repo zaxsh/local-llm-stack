@@ -605,6 +605,7 @@ a number that cannot be traced to one of those files.
 | 2026-11-11 21:35 | repository published: `zaxsh/local-llm-stack`, v1.0.0 |
 | 2026-11-11 23:34 | v1.1.0 — coder36, the two tool fixes, the guide |
 | 2026-11-12 06:21 | v1.2.0 — the capability battery, the measured results, the one-folder Desktop |
+| 2026-11-13 02:35 | v1.3.0 — REA tools in the Web UI, scoped so a chat can hold them; the 85 098-token catalog that broke it, measured and removed |
 
 Release assets follow the same shape every time: `llama-direct.exe` (the compiled launcher),
 `local-llm-stack-vX.Y.Z.zip` (the repository without weights or engine) and `SHA256SUMS.txt`.
