@@ -69,7 +69,8 @@ Prefer to drive it by hand?
 |---|---|
 | `get-started.ps1` | clone to running model, in one command |
 | `GUIDE.md` | **for an agent picking this up cold**: the method, the current state, the traps, what to do next |
-| `bin\` | 27 scripts: registry, fetcher, bundle builder, launcher builder, benchmarks, the capability battery, self-test, agent connectors |
+| `bin\` | 28 scripts: registry, fetcher, bundle builder, launcher builder, benchmarks, the capability battery, self-test, agent connectors |
+| `mcp\` | `rea-mcp.json` — the MCP server definition `llama-server` reads from `--mcp-servers-config`, written by `bin\llm-mcp.ps1` |
 | `models.manifest.json` | the catalogue: repo, file, exact size, sha256 per model |
 | `presets\` | the tuned flags for all seven models, readable without running anything |
 | `launchers\` | the Desktop shortcuts |
@@ -100,6 +101,7 @@ terms, flint NVFP4 from RecursiveSI) and are downloaded from their authors, neve
 13. [The Desktop bundle](#13-the-desktop-bundle)
 14. [Context windows: the ceiling, per model](#14-context-windows-the-ceiling-per-model)
 15. [Getting the models back](#15-getting-the-models-back)
+16. [Capability: what each model can actually do](#16-capability-what-each-model-can-actually-do)
 
 > A note on this document: sections 1-15 are the working notebook, kept in the order it was written,
 > including the parts that were later corrected. If you only want the conclusions, the front of this
@@ -617,6 +619,105 @@ empty, which looks exactly like a broken server or a broken shim. Give them 800+
 tool calls, and only 3.8 GB of VRAM. `llm-scenarios.ps1` re-measures all of the above with six
 ordinary user prompts and writes a report to `Desktop\Local-LLM-Project\docs\`.
 
+### Tools the model can call: REA, inside llama-server
+
+The presets for the four models that can call tools start `llama-server` with
+`--mcp-servers-config mcp\rea-mcp.json`. That file declares
+[REA](https://github.com/morluto/rea) — the reverse-engineering toolset also registered in Claude
+Code, Codex and dsh-tui on this machine — as an MCP server. `llama-server` spawns it over stdio,
+so the analysis tools arrive without a second daemon and without a second port:
+
+```
+srv  start: MCP warmup: 'rea' discovered 39 tools
+srv  setup: Added 39 MCP tools
+```
+
+**The catalog is a context cost, and it is measured.** `llama-server` lists the tools at startup,
+stops REA, and respawns it per call — an idle chat is about 20 prompt tokens. But every tool a chat
+*selects* has its schema embedded in the request, and REA's full catalog is enormous: all 255 at
+once is **85 098 prompt tokens**. That is the failure v1.2.0 shipped — reproduced here on
+`coder36`, whose window is 32 768:
+
+```
+request (85098 tokens) exceeds the available context size (32768 tokens), try increasing it
+```
+
+Measured the same way (one request carrying every tool of the scope, prompt tokens read back from
+the server; `bin\llm-mcptest.ps1 -Scope <name>` repeats a row):
+
+| scope | tools | `qwen3` 16k | `gemma4` 131k |
+|---|---|--:|--:|
+| `session,enhanced` — the default | 39 | 12 402 | 8 604 |
+| `direct,enhanced` | 56 | 10 607 | 8 191 |
+| `session,direct,enhanced` | 80 | — | 14 090 |
+| everything REA publishes | 255 | 85 098 | 63 800 |
+
+The default is `session,enhanced` because it is the smallest scope that can still do the work in a
+chat: `session` carries `open_binary`/`binary_session` (without which nothing can be opened at all)
+and `enhanced` carries `analyze_function`, `decompile_all`, `batch_decompile`, `binary_overview`,
+`get_call_graph`, `find_xrefs` and the `trace_*` family. Widen it with
+`bin\llm-mcp.ps1 -Families session,direct,enhanced`, or take everything with `-Full` — and check the
+result against the windows first:
+
+```powershell
+.\bin\llm-ctxfit.ps1            # every tool preset: FIT / TIGHT / OVER
+.\bin\llm-ctxfit.ps1 -Scope all # what the old full catalog costs
+```
+
+`qwen3` (16 384) carries no tools for the same reason: the 39-tool default is 12 402 of its 16 384
+tokens, which leaves nothing for the tool result the model would then have to read. `coder` and
+`gptoss` never had them — neither emits a native `tool_calls`.
+
+They show up as `rea_*` on `GET /tools` and in the Web UI's tool picker, and the model calls them
+like any other tool. `POST /tools` is the endpoint the UI uses to run one; that is also the
+quickest way to check the chain by hand:
+
+```powershell
+curl.exe -s -X POST http://127.0.0.1:8083/tools -H 'Content-Type: application/json' `
+  -d '{"tool":"rea_binary_session","arguments":{"detail":"summary"}}'
+```
+
+Measured on this machine, each model started with the real preset and the real config, one
+`get_weather`-shaped tool prompt, then the result fed back:
+
+| model | native `tool_calls` | full tool loop | load with MCP |
+|---|---|---|---|
+| `gemma-4-e4b` | ✅ | ✅ answers from the tool result | 9.2 s |
+| `qwen3.6-35b-a3b` | ✅ | ✅ | 29.8 s |
+| `flint-nvfp4-40b` | ✅ | ✅ | 32.8 s |
+| `qwen3.6-27b-a3b-coder` | ✅ | ✅ | 17.0 s |
+| `qwen3-8b` | ✅ | ✅ without tools; the window cannot carry the catalog | 13.9 s |
+| `qwen2.5-coder-7b` | ❌ | ❌ writes `<json>{"name":"get_weather"...}</json>` as text | 12.3 s |
+| `gpt-oss-20b` | ❌ | ❌ leaks Harmony markup, then stops on `max_tokens` | 23.6 s |
+
+The first four carry `Mcp = 'rea'` in the registry and get the flag; the last three do not, because
+a catalog they cannot carry (or cannot call) only clutters the picker. They all still start
+normally — the config is harmless there, it is simply not passed.
+
+**The first native call is slow on purpose.** `timeout_ms` is 450 s in `mcp\rea-mcp.json`: a cold
+Ghidra start is allowed 330 s before the operation itself. A file/package/JS/`.NET`/firmware call
+returns in about a second; the first `rea_open_binary` on a real binary shows a spinner for a while
+and then decompiles.
+
+**It needs Node.js, and Ghidra only for native work.** `bin\llm-mcp.ps1` resolves the Node.js that
+runs REA, the `rea-agents` entrypoint, a JDK ≥ 21 and the unpacked Ghidra, then writes the absolute
+paths into the JSON — the config is generated, never hand-maintained, because a moved path looks
+exactly like "the tools vanished":
+
+```powershell
+.\bin\llm-mcp.ps1 -Print     # what it resolved, writes nothing
+.\bin\llm-mcp.ps1            # rewrite mcp\rea-mcp.json (the bundle gets its own copy)
+```
+
+`mcp\rea-mcp.json` is git-ignored: every path in it belongs to this machine, and a committed copy
+would be wrong on any other. `mcp\README.md` explains each field.
+
+Without the JDK/Ghidra the server still starts and every non-native tool works; `rea_binary_session`
+reports Ghidra as unavailable instead of failing. Verified from inside a spawned server: package
+`6.9.0`, protocol `2024-11-05`, client `llama.cpp/1.0`, 39 tools, Ghidra `available` — the same tool
+catalog digest the dsh-tui registration sees, so the two paths agree.
+
+
 ---
 
 ## 12. Connecting any model to any client
@@ -632,6 +733,7 @@ GGUF header rather than trusting a table.
 | `connect-claude.ps1` | start the Anthropic shim against any port and launch Claude Code |
 | `connect-any.ps1` | print configs for curl, Python/Node SDKs, Continue, Cline, Open WebUI, LangChain |
 | `llm-speccmp.ps1` | A/B speculative decoding (off vs `draft-mtp` vs `ngram-cache`) on your own prompts |
+| `llm-mcp.ps1` | resolve Node/REA/JDK/Ghidra and write `mcp\rea-mcp.json`, the tool server `llama-server` spawns |
 
 ```powershell
 cd C:\Users\fih\llm\bin
@@ -693,6 +795,16 @@ this document. It also drops in `fetch\` - `llm-fetch.ps1` plus `models.manifest
 is what the launcher's Download button runs, so the folder keeps working after it is copied
 elsewhere. `START HERE.cmd` is a menu; each preset starts `llama-server` and opens the built-in
 web UI at `http://127.0.0.1:<port>`.
+
+For the models that can call tools it also writes `mcp\rea-mcp.json` and passes
+`--mcp-servers-config mcp\rea-mcp.json` in those presets, so the REA tools described in section 11
+travel with the folder. The path is relative, and `llama-direct.exe` starts the engine with the
+bundle as its working directory, so moving the folder does not break it. The absolute Node/REA/JDK/
+Ghidra paths *inside* that file are this machine's - regenerate it here after moving any of them:
+
+```powershell
+.\bin\llm-mcp.ps1 -OutFile "$env:USERPROFILE\Desktop\Local-LLM-Project\llama.cpp\mcp\rea-mcp.json"
+```
 
 The presets read their ports, aliases, context sizes and `-n-cpu-moe` values from the registry in
 `llm-up.ps1`, so the bundle cannot drift from the tuned configuration — re-running the script

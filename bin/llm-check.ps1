@@ -185,6 +185,30 @@ print(json.dumps(out))
     } else { Add-Row 'Python' 'not found' '' }
 }
 
+# ---------------------------------------------------------------- mcp tools (REA)
+# What the presets hand llama-server via --mcp-servers-config. Missing is not fatal: the models run,
+# the tools are simply not offered.
+$mcpFile = Join-Path (Split-Path $PSScriptRoot -Parent) 'mcp\rea-mcp.json'
+if (-not (Test-Path $mcpFile)) {
+    Add-Row 'MCP tools (REA)' 'not generated' 'run bin\llm-mcp.ps1'
+}
+else {
+    try {
+        $mcpCfg = Get-Content $mcpFile -Raw | ConvertFrom-Json
+        $rea = $mcpCfg.mcpServers.rea
+        $nodeExe = $rea.command -replace '/', '\'
+        $reaScript = @($rea.args)[0] -replace '/', '\'
+        $hasGhidra = [bool]$rea.env.GHIDRA_INSTALL_DIR
+        if (-not (Test-Path $nodeExe)) { Add-Row 'MCP tools (REA)' 'MISSING' "node: $nodeExe" }
+        elseif (-not (Test-Path $reaScript)) { Add-Row 'MCP tools (REA)' 'MISSING' "rea-agents: $reaScript" }
+        else {
+            $detail = "rea-mcp.json, $([int]($rea.timeout_ms / 1000)) s timeout"
+            if ($hasGhidra) { $detail += ', Ghidra configured' } else { $detail += ', no Ghidra (non-native tools only)' }
+            Add-Row 'MCP tools (REA)' 'ok' $detail
+        }
+    } catch { Add-Row 'MCP tools (REA)' 'partial' "mcp\rea-mcp.json does not parse: $($_.Exception.Message)" }
+}
+
 # ---------------------------------------------------------------- disk
 $c = Get-PSDrive C
 Add-Row 'Disk C: free' 'ok' "$([math]::Round($c.Free / 1GB, 1)) GB"

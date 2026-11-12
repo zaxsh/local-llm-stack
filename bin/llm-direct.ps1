@@ -32,11 +32,12 @@ $bin = $PSScriptRoot
 # ---------------------------------------------------------------- model list
 $up = Get-Content (Join-Path $bin 'llm-up.ps1') -Raw
 $entries = [ordered]@{}
-foreach ($m in [regex]::Matches($up, "(?m)^\s*(\w+)\s*=\s*@\{\s*File\s*=\s*'([^']+)';\s*Port\s*=\s*(\d+);\s*Alias\s*=\s*'([^']+)';\s*Ctx\s*=\s*(\d+);\s*CpuMoe\s*=\s*(\d+);\s*Threads\s*=\s*(\d+)(?:;\s*Note\s*=\s*'([^']*)')?")) {
+foreach ($m in [regex]::Matches($up, "(?m)^\s*(\w+)\s*=\s*@\{\s*File\s*=\s*'([^']+)';\s*Port\s*=\s*(\d+);\s*Alias\s*=\s*'([^']+)';\s*Ctx\s*=\s*(\d+);\s*CpuMoe\s*=\s*(\d+);\s*Threads\s*=\s*(\d+)(?:;\s*Note\s*=\s*'([^']*)')?(?:;\s*Mcp\s*=\s*'([^']*)')?")) {
     $entries[$m.Groups[1].Value] = @{
         File = $m.Groups[2].Value; Port = [int]$m.Groups[3].Value; Alias = $m.Groups[4].Value
         Ctx = $m.Groups[5].Value; CpuMoe = [int]$m.Groups[6].Value; Threads = $m.Groups[7].Value
         Note = $(if ($m.Groups[8].Success) { $m.Groups[8].Value } else { '' })
+        Mcp = $(if ($m.Groups[9].Success) { $m.Groups[9].Value } else { '' })
     }
 }
 if ($entries.Count -eq 0) { throw "could not read the registry from llm-up.ps1" }
@@ -53,9 +54,9 @@ $friendly = [ordered]@{
     qwen36 = @{ Title = 'Qwen3.6 35B-A3B';  Sub = 'strongest - 34 t/s at 20k context, native tool calls' }
     flint  = @{ Title = 'flint 40B';        Sub = 'deep reasoning - 30 t/s at 49k context' }
     qwen3  = @{ Title = 'Qwen3 8B';         Sub = 'balanced - 59 t/s, thinks before answering' }
+    coder36 = @{ Title = 'Qwen3.6 27B-A3B Coder'; Sub = '44 t/s at 32k context - code, native tool calls' }
     coder  = @{ Title = 'Qwen2.5 Coder 7B'; Sub = 'code only - 50 t/s at 32k context, NO tool calls' }
     gptoss = @{ Title = 'gpt-oss 20B';      Sub = '31 t/s at 24k context, no working tool calls' }
-    coder36 = @{ Title = 'Qwen3.6 27B-A3B Coder'; Sub = '44 t/s at 32k context - code, native tool calls' }
 }
 
 function CsLiteral([string]$s) {
@@ -72,10 +73,15 @@ foreach ($k in $entries.Keys) {
     # from the registry, instead of the bare key and a blank line.
     $title = if ($f) { $f.Title } else { $e.Alias }
     $sub = if ($f) { $f.Sub } elseif ($e.Note) { $e.Note } else { '' }
+    # the window says which models arrive with tools; the args below are what actually delivers them
+    if ($e.Mcp) { $sub = if ($sub) { "$sub, $($e.Mcp.ToUpper()) tools" } else { "$($e.Mcp.ToUpper()) tools" } }
     $args = "-m `"models\$($e.File)`" --alias $($e.Alias) --host 127.0.0.1 --port $($e.Port) -c $($e.Ctx) --jinja --metrics --no-warmup -t $($e.Threads) -tb $($e.Threads) -ngl 99 -fa on -ctk f16 -ctv f16"
     # no quote-doubling here: CsLiteral() emits a verbatim @"..." string and doubles them itself.
     # Doing it in both places sent -m ""models\x.gguf"" to the engine.
     if ($e.CpuMoe -gt 0) { $args += " --n-cpu-moe $($e.CpuMoe)" }
+    # The launcher runs llama-server with models\ and mcp\ relative to the bundle, so this path is
+    # valid wherever the folder ends up.
+    if ($e.Mcp) { $args += " --mcp-servers-config mcp\rea-mcp.json" }
 
     $cat = $catalog[$k]
     $repo = ''; $repoFile = ''; $size = '0'

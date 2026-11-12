@@ -8,6 +8,7 @@ taskkill /IM llama-server.exe /F >nul 2>&1
 echo.
 echo   gptoss  ->  http://127.0.0.1:8082/
 echo   model id: gpt-oss-20b    context: 24576    n-cpu-moe: 14
+echo   tools: none
 echo.
 echo   The chat page opens in your browser in a few seconds. Ctrl+C here to stop.
 echo.

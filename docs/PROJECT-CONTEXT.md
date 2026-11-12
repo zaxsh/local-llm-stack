@@ -68,6 +68,7 @@ C:\Users\fih\llm\
                      llm-ncmoe-sweep.ps1  ncmoe vs t/s, marks OOM runs
                      llm-speccmp.ps1   A/B spec decoding (none | draft-mtp | ngram-cache)
                      llm-desktop.ps1   builds the Desktop bundle + presets from the registry
+                     llm-mcp.ps1       resolves Node/REA/JDK/Ghidra -> mcp\rea-mcp.json (MCP tools)
                      llm-direct.ps1    builds Desktop\llama-direct.exe (GUI) from the registry
                      llm-verify-bundle.ps1  reads the real .cmd presets and tests each one
                      llm-maxctx.ps1    two-point VRAM probe (unreliable here — see §7)
@@ -87,7 +88,7 @@ C:\Users\fih\Desktop\
   4 - Claude Code (local model).cmd   5 - dsh-tui (local model).cmd
   6 - Connect anything (configs).cmd  7 - Start Qwen3.6 35B (smart).cmd
   llama-direct.exe               the 16.5 KB one-click GUI (start model -> chat page opens)
-  llama.cpp\                     self-contained copy: binaries, models, presets\, START HERE.cmd
+  llama.cpp\                     self-contained copy: binaries, models, presets\, mcp\, START HERE.cmd
   local-llm-report.md            34 KB measurement report
   local-llm-results.csv          the scenario suite
   how-the-numbers-were-made.md   methodology (ncmoe sweep, MTP A/B, GPU clock ramp)

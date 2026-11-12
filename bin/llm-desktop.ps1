@@ -110,10 +110,11 @@ Write-Host "  fetch: llm-fetch.ps1 + models.manifest.json" -ForegroundColor Dark
 # measured -n-cpu-moe / thread values.
 $up = Get-Content (Join-Path $bin 'llm-up.ps1') -Raw
 $entries = [ordered]@{}
-foreach ($m in [regex]::Matches($up, "(?m)^\s*(\w+)\s*=\s*@\{\s*File\s*=\s*'([^']+)';\s*Port\s*=\s*(\d+);\s*Alias\s*=\s*'([^']+)';\s*Ctx\s*=\s*(\d+);\s*CpuMoe\s*=\s*(\d+);\s*Threads\s*=\s*(\d+)")) {
+foreach ($m in [regex]::Matches($up, "(?m)^\s*(\w+)\s*=\s*@\{\s*File\s*=\s*'([^']+)';\s*Port\s*=\s*(\d+);\s*Alias\s*=\s*'([^']+)';\s*Ctx\s*=\s*(\d+);\s*CpuMoe\s*=\s*(\d+);\s*Threads\s*=\s*(\d+)(?:;\s*Note\s*=\s*'[^']*')?(?:;\s*Mcp\s*=\s*'([^']*)')?")) {
     $entries[$m.Groups[1].Value] = @{
         File = $m.Groups[2].Value; Port = $m.Groups[3].Value; Alias = $m.Groups[4].Value
         Ctx = $m.Groups[5].Value; CpuMoe = $m.Groups[6].Value; Threads = $m.Groups[7].Value
+        Mcp = $(if ($m.Groups[8].Success) { $m.Groups[8].Value } else { '' })
     }
 }
 if ($entries.Count -eq 0) { throw "could not read the model registry from llm-up.ps1" }
@@ -123,6 +124,7 @@ $friendly = @{
     qwen36 = @{ Title = 'Qwen3.6 35B-A3B - strongest';                 Note = '34 t/s at 20k context, 2.8 s to first token, 8 of 256 experts fire' }
     flint = @{ Title = 'flint 40B       - deep reasoning';              Note = '30 t/s at 49k context, 3.9 s to first token, MoE split from DDR5' }
     qwen3 = @{ Title = 'Qwen3 8B        - balanced';                    Note = '59 t/s at 16k context, reasons before it answers' }
+    coder36 = @{ Title = 'Qwen3.6 27B coder - code + tools';           Note = '44 t/s at 32k context, thinks first, native tool calls' }
     coder = @{ Title = 'Qwen2.5 Coder 7B - code only';                  Note = '50 t/s at 32k context, but NO native tool calls' }
     gptoss = @{ Title = 'gpt-oss 20B     - OpenAI''s open model';       Note = '31 t/s at 24k context, no working tool calls' }
 }
@@ -142,6 +144,8 @@ foreach ($k in $entries.Keys) {
     $e = $entries[$k]
     $t = if ($friendly[$k]) { $friendly[$k].Title } else { $k }
     $n = if ($friendly[$k]) { $friendly[$k].Note } else { '' }
+    # say which models bring tools, so the menu and the presets cannot disagree
+    if ($e.Mcp) { $n = if ($n) { "$n, $($e.Mcp.ToUpper()) tools" } else { "$($e.Mcp.ToUpper()) tools" } }
     $menu.Add(("echo   {0}  {1}" -f $i, $t))
     $menu.Add(("echo         {0}" -f $n))
     $order += $k
@@ -184,6 +188,7 @@ foreach ($k in $entries.Keys) {
         'echo.',
         "echo   $k  ->  http://127.0.0.1:$($e.Port)/",
         "echo   model id: $($e.Alias)    context: $($e.Ctx)    n-cpu-moe: $($e.CpuMoe)",
+        $(if ($e.Mcp) { "echo   tools: $($e.Mcp)  (REA - pick them per chat in the Web UI)" } else { 'echo   tools: none' }),
         'echo.',
         'echo   The chat page opens in your browser in a few seconds. Ctrl+C here to stop.',
         'echo.',
@@ -203,6 +208,8 @@ foreach ($k in $entries.Keys) {
         "  -ngl 99 -fa on -ctk f16 -ctv f16"
     )
     if ([int]$e.CpuMoe -gt 0) { $args += "  --n-cpu-moe $($e.CpuMoe)" }
+    # llama-server spawns REA from this file; the tools show up as rea_* in the Web UI.
+    if ($e.Mcp) { $args += "  --mcp-servers-config mcp\rea-mcp.json" }
     for ($j = 0; $j -lt $args.Count; $j++) {
         $suffix = if ($j -lt $args.Count - 1) { ' ^' } else { '' }
         $lines += ($args[$j] + $suffix)
@@ -220,12 +227,13 @@ Set-Content -Path (Join-Path $Destination 'stop.cmd') -Value @(
 
 # ---------------------------------------------------------------- readme
 $tbl = New-Object System.Collections.Generic.List[string]
-$tbl.Add('| preset | model | port | context | n-cpu-moe | threads |')
-$tbl.Add('|---|---|---|---|---|---|')
+$tbl.Add('| preset | model | port | context | n-cpu-moe | threads | tools |')
+$tbl.Add('|---|---|---|---|---|---|---|')
 foreach ($k in $entries.Keys) {
     $e = $entries[$k]
-    $tbl.Add(("| ``{0}.cmd`` | ``{1}`` | {2} | {3} | {4} | {5} |" -f $k, $e.Alias, $e.Port, $e.Ctx,
-            $(if ([int]$e.CpuMoe -gt 0) { $e.CpuMoe } else { '-' }), $e.Threads))
+    $tbl.Add(("| ``{0}.cmd`` | ``{1}`` | {2} | {3} | {4} | {5} | {6} |" -f $k, $e.Alias, $e.Port, $e.Ctx,
+            $(if ([int]$e.CpuMoe -gt 0) { $e.CpuMoe } else { '-' }), $e.Threads,
+            $(if ($e.Mcp) { 'REA' } else { '-' })))
 }
 
 $readmeTemplate = @'
@@ -318,11 +326,54 @@ Every preset uses:
 -t / -tb         thread counts measured on this chip
 --jinja          the model's real chat template
 --n-cpu-moe N    MoE only: how many layers' experts stay in RAM
+--mcp-servers-config mcp\rea-mcp.json
+                 REA analysis tools, spawned by llama-server itself (see below)
 ```
 
 `n-cpu-moe` is the one number worth understanding. MoE models read only a few experts per token,
 so the experts that do not fit can live in DDR5 and still be fast. The value here is the lowest
 one that loads; one lower and the model fails with `failed to create_context`.
+
+## Tools: REA
+
+Presets with `REA` in the tools column start `llama-server` with `--mcp-servers-config
+mcp\rea-mcp.json`. That file declares one MCP server - [REA](https://github.com/morluto/rea), the
+reverse-engineering toolset that is also registered in Claude Code, Codex, dsh-tui and the rest of
+the agents on this machine - and `llama-server` spawns it as a child process over stdio. No extra
+daemon, no second port.
+
+How it behaves:
+
+- **the catalog costs nothing until a chat selects tools, and a lot once it does.** `llama-server`
+  spawns REA once at startup to list its tools (39 by default, `rea_open_binary`,
+  `rea_procedure_pseudo_code`, `rea_analyze_function`, ...), then stops it and respawns it when a
+  tool is actually called. An idle conversation starts at ~22 prompt tokens. But every tool you
+  select has its schema embedded in the request, and REA publishes 255 of them: 85 098 prompt
+  tokens, more than a 32 768-token model owns.
+- **the scope is a budget, and it is set for you.** `mcp\rea-mcp.json` advertises the 39 tools that
+  can open a target and analyze it (`session,enhanced`), which is 12 402 tokens - 38 % of `coder36`'s
+  window and 25 % of `flint`'s. Widen it only after checking `bin\llm-ctxfit.ps1`, and still pick a
+  handful of tools per chat: the **+** menu next to the message box, then **Tools**.
+- **the first call is slow on purpose.** `timeout_ms` is 450 s in `mcp\rea-mcp.json`, because the
+  first native call may start a cold Ghidra: 330 s for it to come up plus the operation. The tool
+  card shows a spinner for a while and then returns real decompiled code.
+- **native analysis needs Ghidra and a JDK.** `mcp\rea-mcp.json` points `JAVA_HOME` at a JDK 21 and
+  `GHIDRA_INSTALL_DIR` at the unpacked Ghidra 12.x. Without them REA still answers - file, package,
+  JavaScript, .NET, firmware and capture tools all work - only decompilation reports unavailable.
+- **`rea_binary_session` is the status tool.** Ask for it first when something looks wrong: it
+  reports the REA version, the tool count and which providers are live.
+
+Regenerate the file after moving Node.js, REA, the JDK or Ghidra - the generator lives in the
+repository, not in this folder, because it reads what is installed on the machine:
+
+```
+pwsh -File C:\Users\fih\llm\bin\llm-mcp.ps1 -OutFile "<this folder>\mcp\rea-mcp.json"
+```
+
+`bin\llm-mcp.ps1 -Print` shows what it resolves without writing. `-Families session,enhanced,direct`
+widens the catalog to 80 tools (16 035 tokens); `-Full` takes all 255 and only `gemma4`'s 131 072-token
+window can hold that. Check before you widen - `bin\llm-ctxfit.ps1` prints the arithmetic for every
+preset in this folder.
 
 ## Files
 
@@ -333,6 +384,7 @@ one that loads; one lower and the model fails with `failed to create_context`.
 | `presets\` | one `.cmd` per model, the tuned flags are inside |
 | `models\` | the GGUFs - **hard links**, so they use no extra disk |
 | `fetch\` | `llm-fetch.ps1` and `models.manifest.json` - the downloader behind the Download button |
+| `mcp\` | `rea-mcp.json` - the REA tool server the presets pass to `--mcp-servers-config` |
 | `stop.cmd` | kill the server, free VRAM |
 | `llama-server.exe`, `*.dll` | the engine (CUDA build, b12255) |
 
@@ -373,6 +425,20 @@ $readme = $readmeTemplate.Replace('{{TABLE}}', ($tbl -join "`n"))
 Set-Content -Path (Join-Path $Destination 'README.md') -Value $readme
 
 Write-Host "  presets: $((Get-ChildItem (Join-Path $Destination 'presets') -Filter '*.cmd').Count)" -ForegroundColor DarkGray
+
+# ---------------------------------------------------------------- mcp
+# The bundle carries its own copy of the MCP config, written by the same generator the repository
+# uses, so the absolute paths always match this machine. Only needed when a model asks for tools.
+if ($entries.Values | Where-Object { $_.Mcp }) {
+    $mcpDir = Join-Path $Destination 'mcp'
+    New-Item -ItemType Directory -Force -Path $mcpDir | Out-Null
+    & pwsh -NoProfile -File (Join-Path $bin 'llm-mcp.ps1') -OutFile (Join-Path $mcpDir 'rea-mcp.json') *> $null
+    if (Test-Path (Join-Path $mcpDir 'rea-mcp.json')) {
+        Write-Host "  mcp: rea-mcp.json (REA tools as rea_* in the Web UI)" -ForegroundColor DarkGray
+    } else {
+        Write-Host "  ! mcp config was not written - those presets will start without tools" -ForegroundColor Yellow
+    }
+}
 Write-Host "  done -> $Destination" -ForegroundColor Green
 Write-Host ""
 

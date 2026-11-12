@@ -39,3 +39,6 @@ Thumbs.db
 desktop.ini
 *.tmp
 *.bak
+
+# generated: absolute Node/REA/JDK/Ghidra paths for this machine (bin/llm-mcp.ps1 writes it)
+mcp/*.json

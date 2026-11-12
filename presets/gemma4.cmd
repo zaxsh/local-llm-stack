@@ -8,6 +8,7 @@ taskkill /IM llama-server.exe /F >nul 2>&1
 echo.
 echo   gemma4  ->  http://127.0.0.1:8083/
 echo   model id: gemma-4-e4b    context: 131072    n-cpu-moe: 0
+echo   tools: rea  (REA - pick them per chat in the Web UI)
 echo.
 echo   The chat page opens in your browser in a few seconds. Ctrl+C here to stop.
 echo.
@@ -22,4 +23,5 @@ start "" cmd /c "timeout /t 8 >nul & start http://127.0.0.1:8083"
   -c 131072 ^
   --jinja --metrics --no-warmup ^
   -t 20 -tb 20 ^
-  -ngl 99 -fa on -ctk f16 -ctv f16
+  -ngl 99 -fa on -ctk f16 -ctv f16 ^
+  --mcp-servers-config mcp\rea-mcp.json

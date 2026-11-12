@@ -71,6 +71,11 @@ param(
     [switch]$NoFlashAttn,
     [switch]$DryRun,
 
+    # MCP tool servers to expose. 'rea' means mcp\rea-mcp.json (written by bin\llm-mcp.ps1), or
+    # pass any other JSON file. -NoMcp wins when both are given.
+    [string]$Mcp = '',
+    [switch]$NoMcp,
+
     # Speculative decoding: none | draft-mtp | draft-simple | draft-eagle3 | ngram-cache | ...
     # draft-mtp uses the model's own MTP head, so it costs no extra VRAM. ngram-* need no draft.
     [string]$SpecType = '',
@@ -186,6 +191,25 @@ if ($Backend -in 'cuda', 'vulkan') {
 }
 
 if (-not $NoFlashAttn) { $llamaArgs += @('-fa', 'on') }
+
+# --- MCP tool servers -------------------------------------------------------
+# llama-server spawns each declared server as a child process over stdio and exposes its tools as
+# <server>_<tool> on GET /tools and in the Web UI. REA is the one we ship, so the analysis tools
+# are there without any extra daemon. The flag is probed first: a build without it ignores unknown
+# options, and then the catalog silently looks like "the tools disappeared".
+if ($Mcp -and -not $NoMcp) {
+    $mcpPath = $Mcp
+    if (-not (Test-Path $mcpPath)) {
+        $cand = Join-Path (Join-Path $llmRoot 'mcp') "$Mcp-mcp.json"
+        if (Test-Path $cand) { $mcpPath = $cand }
+    }
+    if (-not (Test-Path $mcpPath)) {
+        throw "MCP config not found: $Mcp - run bin\llm-mcp.ps1 to write mcp\rea-mcp.json"
+    }
+    $knowsMcp = (& $server --help 2>&1 | Select-String -SimpleMatch 'mcp-servers-config') -ne $null
+    if ($knowsMcp) { $llamaArgs += @('--mcp-servers-config', (Resolve-Path $mcpPath).Path) }
+    else { Write-Host "  ! this llama.cpp build has no --mcp-servers-config - no MCP tools" -ForegroundColor Yellow }
+}
 
 # The OpenVINO backend compiles a graph PER SLOT at load time (~20 s each), and it rejects
 # non-default loading modes with "[GPU] shared USM buffer has smaller size (0)".

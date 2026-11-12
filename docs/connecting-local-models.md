@@ -166,6 +166,7 @@ An agent loop is only as good as the model's tool calling. Measured on this mach
 | `qwen3-8b` | ✅ | correct, but reasons first — allow 600+ output tokens |
 | `qwen3.6-35b-a3b` | ✅ | newest and strongest here: 42.7 t/s, 2.8 s TTFT, 16k ctx |
 | `flint-nvfp4-40b` | ✅ | 33 t/s in the same session, 3.9 s to first token |
+| `qwen3.6-27b-a3b-coder` | ✅ | 44 t/s, 32k ctx — the coder that does call tools |
 | `qwen2.5-coder-7b` | ❌ | writes the call as a JSON code block |
 | `gpt-oss-20b` | ❌ | emits raw Harmony markup as text |
 
@@ -178,6 +179,42 @@ curl.exe -s http://127.0.0.1:8083/v1/chat/completions -H "content-type: applicat
 
 Look for `"finish_reason":"tool_calls"`. If it says `"stop"` and the answer is prose, the model
 cannot do it — no client setting will fix that.
+
+### Tools that live on the server: MCP
+
+Those examples all hand the model a tool schema the *client* owns. `llama-server` can also host
+tools itself: `--mcp-servers-config mcp\rea-mcp.json` spawns an MCP server over stdio at startup,
+lists its tools once, stops it, and respawns it per call. The tools appear as `<server>_<tool>` on
+`GET /tools` and in the Web UI's picker, and the server runs them — the client never sees the
+transport.
+
+```powershell
+# which tools exist right now (39 for REA with the default scope, on a server started with the flag)
+curl.exe -s http://127.0.0.1:8083/tools
+
+# run one exactly the way the Web UI does, without a model in the loop
+curl.exe -s -X POST http://127.0.0.1:8083/tools -H "content-type: application/json" `
+  -d '{\"tool\":\"rea_binary_session\",\"arguments\":{\"detail\":\"summary\"}}'
+```
+
+Practical consequences:
+
+- **The catalog is free until a chat selects tools, and expensive once it does.** A chat with no
+  tools selected is ~22 prompt tokens however many are registered; select them and every schema
+  goes into the request. REA's full 255 are 85 098 prompt tokens, which is more than `coder36`'s
+  32 768-token window — that request fails before the model reads it (`request (85210 tokens)
+  exceeds the available context size (32768 tokens)` is the Web UI's wording).
+- **So the scope is a budget.** Here it is `session,enhanced` (39 tools, 12 402 tokens), and
+  `llm-ctxfit.ps1` prints the arithmetic per preset. Widen with `llm-mcp.ps1 -Families ...` only
+  after checking that table, and still select a handful of tools per chat rather than all of them.
+- **A server without the flag has no MCP tools at all**, and `GET /tools` returns `[]` — that is the
+  first thing to check when a client "sees no tools".
+- **Timeouts.** Every MCP call is bounded by `timeout_ms` in the JSON (450 s here, because a cold
+  Ghidra start is 330 s). A client-side timeout shorter than that will give up while the call is
+  still working.
+
+Which of these models can drive those tools is the table above; `coder` and `gptoss` cannot, so
+their presets deliberately do not pass the flag.
 
 ---
 

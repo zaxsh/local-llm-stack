@@ -273,6 +273,49 @@ pwsh -NoProfile -File .\bin\llm-ctxgrow.ps1 -Model <key> -Candidates '28672,3276
    speed at 78k tokens while `gptoss` and `coder36` do not move. That argues for a second field —
    `CtxComfort` — per model, chosen as the point where decode is still ≥ 80 %. Nobody has decided
    where that cut belongs, and the launcher would have to honour it.
+
+## 8b. Tools the models can call (REA), and what is verified
+
+`llama-server` here has `--mcp-servers-config`. That is now used: `mcp\rea-mcp.json` declares REA as
+an MCP server, and every preset whose registry entry carries `Mcp = 'rea'` passes it. `llama-server`
+spawns REA over stdio at startup to list its tools, stops it, and respawns it per call — so the
+tools are `rea_*` on `GET /tools` and in the Web UI, and an idle chat pays nothing for them.
+
+Three files hold this, in the order they matter:
+
+| file | role |
+|---|---|
+| `bin\llm-mcp.ps1` | resolves Node, `rea-agents`, a JDK ≥ 21 and Ghidra, writes `mcp\rea-mcp.json`. **Generated, never hand-edited** — a moved path is the only failure mode that looks like "the tools are gone" |
+| `mcp\rea-mcp.json` | the definition itself; `timeout_ms` 450000 because a cold Ghidra start may take 330 s |
+| registry `Mcp = 'rea'` | decides which presets get the flag; `llm-desktop.ps1` and `llm-direct.ps1` both read it, the selftest checks preset parity |
+
+**Measured, per model, with the real preset plus the real config** (2026-11-13): all seven start and
+list REA's tools. Four complete a tool loop — `gemma4`, `qwen36`, `flint`, `coder36`. `coder` writes
+`<json>{"name":...}</json>` as text and `gptoss` leaks Harmony markup, so those two deliberately
+carry no `Mcp` field; both still load fine, they just have nothing to call. `qwen3` does call tools
+but cannot carry the catalog: 39 tools are 12 402 of its 16 384 tokens. Load times land within a
+second of the numbers without MCP (9.2 s gemma4 … 32.8 s flint), so the feature costs nothing at
+startup on this machine.
+
+Re-verify without loading all seven:
+
+```powershell
+pwsh -NoProfile -File .\bin\llm-mcptest.ps1 -Model gemma4   # fit + a real call + POST /tools
+curl.exe -s http://127.0.0.1:8083/tools | Select-Object -First 1        # 39 rea_* entries
+```
+
+Traps worth knowing, all three found the hard way:
+
+- **The catalog is not free once a chat selects tools.** Every selected tool's schema goes into the
+  request, and all 255 are 85 098 prompt tokens — the exact reason v1.2.0's Web UI answered with
+  `request (85210 tokens) exceeds the available context size (32768 tokens)`. The default scope is
+  now `session,enhanced` (39 tools, 12 402 tokens); `bin\llm-ctxfit.ps1` is the arithmetic, and the
+  self-test fails if a preset cannot hold its catalog with half its window left.
+- **A scope change needs a server restart.** `llama-server` reads `mcp\rea-mcp.json` once, at startup.
+- **`Mcp` sits *after* `Note` in the registry line, on purpose.** Every generator matches the entry
+  with one regex ending `(?:;\s*Note\s*=\s*'[^']*')?(?:;\s*Mcp\s*=\s*'([^']*)')?`; inserting a field
+  between `Threads` and `Note` breaks the capture silently and the presets lose the flag.
+
 ## 9. Adding the eighth model (the recipe, generalised)
 
 1. **Is the repo public?** `curl -s https://huggingface.co/api/models/<repo>?blobs=true` → `gated`,

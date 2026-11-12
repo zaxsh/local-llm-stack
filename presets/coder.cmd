@@ -8,6 +8,7 @@ taskkill /IM llama-server.exe /F >nul 2>&1
 echo.
 echo   coder  ->  http://127.0.0.1:8081/
 echo   model id: qwen2.5-coder-7b    context: 32768    n-cpu-moe: 0
+echo   tools: none
 echo.
 echo   The chat page opens in your browser in a few seconds. Ctrl+C here to stop.
 echo.

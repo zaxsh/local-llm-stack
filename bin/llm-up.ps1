@@ -24,16 +24,27 @@ param(
 $ErrorActionPreference = 'Stop'
 $modelsDir = (Join-Path (Split-Path $PSScriptRoot -Parent) 'models')
 
+# The GGUFs may live only in the Desktop bundle (it hard-links them, or holds the one copy after a
+# Download). Look there before calling a model missing, so the registry runs from either place.
+$bundleModels = Join-Path $env:USERPROFILE 'Desktop\Local-LLM-Project\llama.cpp\models'
+function Resolve-ModelFile([string]$name) {
+    $local = Join-Path $modelsDir $name
+    if (Test-Path $local) { return $local }
+    $bundled = Join-Path $bundleModels $name
+    if (Test-Path $bundled) { return $bundled }
+    return $null
+}
+
 # name -> file, port, alias, and the flags that were actually measured to be best.
 # Update this table (not the routes) when a model is replaced.
 $registry = [ordered]@{
-    gemma4  = @{ File = 'gemma-4-E4B-it-q4kxl.gguf';  Port = 8083; Alias = 'gemma-4-e4b';       Ctx = 131072; CpuMoe = 0;  Threads = 20; Note = '4B dense Gemma 4, 74.1 t/s at full 131k ctx, native tool calls - best agent default; keeps 62 % of its speed at 78k tok' }
-    flint   = @{ File = 'flint-nvfp4-40b.gguf';       Port = 8080; Alias = 'flint-nvfp4-40b';   Ctx = 49152; CpuMoe = 40; Threads = 16; Note = '40B MoE, 29.8 t/s, max ctx 49152; keeps 84 % at 29k tok' }
-    qwen3   = @{ File = 'Qwen3-8B-Q4_K_M.gguf';       Port = 8081; Alias = 'qwen3-8b';          Ctx = 16384; CpuMoe = 0;  Threads = 20; Note = '8B dense, 59.0 t/s, max ctx 16384 (20480 OOM); keeps 82 % at 9800 tok' }
+    gemma4  = @{ File = 'gemma-4-E4B-it-q4kxl.gguf';  Port = 8083; Alias = 'gemma-4-e4b';       Ctx = 131072; CpuMoe = 0;  Threads = 20; Note = '4B dense Gemma 4, 74.1 t/s at full 131k ctx, native tool calls - best agent default; keeps 62 % of its speed at 78k tok'; Mcp = 'rea' }
+    flint   = @{ File = 'flint-nvfp4-40b.gguf';       Port = 8080; Alias = 'flint-nvfp4-40b';   Ctx = 49152; CpuMoe = 40; Threads = 16; Note = '40B MoE, 29.8 t/s, max ctx 49152; keeps 84 % at 29k tok'; Mcp = 'rea' }
+    qwen3   = @{ File = 'Qwen3-8B-Q4_K_M.gguf';       Port = 8081; Alias = 'qwen3-8b';          Ctx = 16384; CpuMoe = 0;  Threads = 20; Note = '8B dense, 59.0 t/s, max ctx 16384 (20480 OOM); keeps 82 % at 9800 tok; no MCP tools - the 39-tool default costs 12402 of these 16384 tokens, leaving no room for a tool result' }
     coder   = @{ File = 'qwen2.5-coder-7b-q4km.gguf'; Port = 8081; Alias = 'qwen2.5-coder-7b';  Ctx = 32768; CpuMoe = 0;  Threads = 20; Note = '7B dense coder, 50.3 t/s at full 32768 ctx, no native tools; keeps 80 % at 19k tok' }
     gptoss  = @{ File = 'gpt-oss-20b-MXFP4.gguf';     Port = 8082; Alias = 'gpt-oss-20b';       Ctx = 24576; CpuMoe = 14; Threads = 20; Note = '20B MoE, 30.8 t/s at max ctx 24576 (32768 OOM at ncmoe 14); no native tools; keeps 93 % at 15k tok' }
-    coder36 = @{ File = 'qwen3.6-27b-a3b-coder-q4km.gguf'; Port = 8085; Alias = 'qwen3.6-27b-a3b-coder'; Ctx = 32768; CpuMoe = 26; Threads = 16; Note = '27B MoE coder (3B active), 44.4 t/s at max ctx 32768; n-cpu-moe 26 is both the floor (24 is a CUDA OOM) and the fastest; native tool calls; thinks first (docs for the flags); keeps 93 % at 20k tok' }
-  qwen36  = @{ File = 'qwen3.6-35b-a3b-mtp-q4km.gguf'; Port = 8084; Alias = 'qwen3.6-35b-a3b'; Ctx = 20480; CpuMoe = 30; Threads = 16; Note = '35B MoE 8/256 experts, 34.0 t/s at max ctx 20480 (24576 loads but cannot complete); native tools; keeps 85 % at 12k tok' }
+    coder36 = @{ File = 'qwen3.6-27b-a3b-coder-q4km.gguf'; Port = 8085; Alias = 'qwen3.6-27b-a3b-coder'; Ctx = 32768; CpuMoe = 26; Threads = 16; Note = '27B MoE coder (3B active), 44.4 t/s at max ctx 32768; n-cpu-moe 26 is both the floor (24 is a CUDA OOM) and the fastest; native tool calls; thinks first (docs for the flags); keeps 93 % at 20k tok'; Mcp = 'rea' }
+  qwen36  = @{ File = 'qwen3.6-35b-a3b-mtp-q4km.gguf'; Port = 8084; Alias = 'qwen3.6-35b-a3b'; Ctx = 20480; CpuMoe = 30; Threads = 16; Note = '35B MoE 8/256 experts, 34.0 t/s at max ctx 20480 (24576 loads but cannot complete); native tools; keeps 85 % at 12k tok'; Mcp = 'rea' }
 }
 
 function Get-Running {
@@ -48,21 +59,22 @@ function Show-Table {
         if ($cmd -match '--port\s+(\d+)') { $port = $Matches[1] }
     }
     Write-Host ''
-    Write-Host '  model    port   id                      status' -ForegroundColor DarkGray
-    Write-Host '  ------------------------------------------------------------------' -ForegroundColor DarkGray
+    Write-Host '  model    port   tools  id                      status' -ForegroundColor DarkGray
+    Write-Host '  -------------------------------------------------------------------------' -ForegroundColor DarkGray
     foreach ($k in $registry.Keys) {
         $m = $registry[$k]
-        $exists = Test-Path (Join-Path $modelsDir $m.File)
+        $exists = [bool](Resolve-ModelFile $m.File)
         $state = if (-not $exists) { 'not downloaded' }
                  elseif ($running -and $port -eq "$($m.Port)") { "RUNNING on :$($m.Port)" }
                  else { 'ready' }
         $colour = if (-not $exists) { 'DarkGray' } elseif ($state -like 'RUNNING*') { 'Green' } else { 'Gray' }
-        Write-Host ('  {0,-8} {1,-6} {2,-23} {3}' -f $k, $m.Port, $m.Alias, $state) -ForegroundColor $colour
+        $tools = if ($m.Mcp) { $m.Mcp } else { '-' }
+        Write-Host ('  {0,-8} {1,-6} {2,-6} {3,-23} {4}' -f $k, $m.Port, $tools, $m.Alias, $state) -ForegroundColor $colour
     }
     Write-Host ''
     foreach ($k in $registry.Keys) {
         $m = $registry[$k]
-        if (Test-Path (Join-Path $modelsDir $m.File)) {
+        if (Resolve-ModelFile $m.File) {
             Write-Host ("  {0,-8} {1}" -f $k, $m.Note) -ForegroundColor DarkGray
         }
     }
@@ -83,8 +95,8 @@ if (-not $Model) { Show-Table; return }
 $key = $registry.Keys | Where-Object { $_ -like "$Model*" } | Select-Object -First 1
 if (-not $key) { throw "Unknown model '$Model'. Known: $($registry.Keys -join ', ')" }
 $cfg = $registry[$key]
-$file = Join-Path $modelsDir $cfg.File
-if (-not (Test-Path $file)) { throw "Not downloaded: $file" }
+$file = Resolve-ModelFile $cfg.File
+if (-not $file) { throw "Not downloaded: $($cfg.File) - press Download in llama-direct.exe" }
 
 # only one model fits in 8 GB of VRAM
 Get-Running | ForEach-Object { $_.Kill(); $_ }
@@ -95,6 +107,7 @@ $serverArgs = @(
     '-Ctx', $cfg.Ctx, '-Threads', $cfg.Threads
 )
 if ($cfg.CpuMoe -gt 0) { $serverArgs += @('-CpuMoe', $cfg.CpuMoe) }
+if ($cfg.Mcp) { $serverArgs += @('-Mcp', $cfg.Mcp) }
 
 Write-Host ("  starting {0}  ->  http://127.0.0.1:{1}/v1   (id: {2})" -f $key, $cfg.Port, $cfg.Alias) -ForegroundColor Cyan
 

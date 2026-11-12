@@ -414,6 +414,174 @@ record.
 
 ---
 
+## Phase 8 — the models get tools: REA inside llama-server (2026-11-13 01:20 → 02:10)
+
+**Asked for:** *"add it in our custom llama.cpp, and update everything — make sure it runs very well
+and unproblematic on all of the models, you can test it if you need to."*
+
+The build in `llama.cpp\b12255\cuda` (and the older 12110 root copy) already accepts
+`--mcp-servers-config PATH`. So this is not a rebuild: it is a config file, a registry field, and
+three generators that had to learn one more flag.
+
+What was decided, and why:
+
+- **The config is generated, never committed.** `bin\llm-mcp.ps1` resolves the Node.js that runs REA,
+  the installed `rea-agents\scripts\rea.mjs`, a JDK ≥ 21 and Ghidra 12.1.4, and writes
+  `mcp\rea-mcp.json` with forward-slashed absolute paths. A hand-written file breaks the first time
+  anything moves, and the symptom is "the tools are gone" with no error. It is git-ignored for the
+  same reason, and the bundle builder writes its own copy.
+- **`timeout_ms` is 450000.** A cold Ghidra start is allowed 330 s before the operation runs;
+  anything shorter kills the first `rea_open_binary`.
+- **`Mcp = 'rea'` goes at the end of the registry line, after `Note`.** The generators match entries
+  with one regex; a field inserted in the middle silently stops `Note` or `Mcp` from being captured.
+  That is the trap this phase added to `GUIDE.md`.
+- **Only five of the seven models get it.** Measured, one model at a time, real preset + real config:
+
+  | model | tools listed | native call | tool loop | load |
+  |---|---|---|---|---|
+  | gemma4 | 255 | ✅ | ✅ | 9.2 s |
+  | qwen36 | 255 | ✅ | ✅ | 29.8 s |
+  | flint | 255 | ✅ | ✅ | 32.8 s |
+  | coder36 | 255 | ✅ | ✅ | 17.0 s |
+  | qwen3 | 255 | ✅ | ✅ | 13.9 s |
+  | coder | 255 | ❌ `<json>{"name":...}</json>` as text | ❌ | 12.3 s |
+  | gptoss | 255 | ❌ Harmony markup, stops on `max_tokens` | ❌ | 23.6 s |
+
+  Load times are within a second of the same models without the flag, so nothing regressed. `coder`
+  and `gptoss` keep working exactly as before; they just do not carry a catalog they cannot call.
+
+What was verified end to end, through the stack (not by hand):
+
+1. `llm-up.ps1 gemma4` → the child's command line contains the flag → `GET /tools` returns 255
+   `rea_*` entries.
+2. The model, given `rea_binary_session`, answered `finish_reason=tool_calls` with
+   `{"detail":"summary"}`.
+3. `POST /tools` (the endpoint the Web UI uses) executed it server-side: REA package **6.9.0**,
+   protocol `2024-11-05`, client `llama.cpp/1.0`, 255 tools, tool-catalog digest `7ffed2ab…` — the
+   same digest the dsh-tui registration sees, and Ghidra reported `available`, which proves the
+   `JAVA_HOME`/`GHIDRA_INSTALL_DIR` in the `env` block reached the spawned server.
+4. `llama-direct.exe` was rebuilt and the compiled argument strings contain the flag five times
+   (one per tool-capable model) — the GUI path, not just the CLI path.
+
+Two other things had to change to make that verification honest:
+
+- **`llm-up.ps1` could not start anything.** The registry points at `models\<file>`, and the
+  repository's `models\` no longer holds the GGUFs — the Desktop bundle does. A `Resolve-ModelFile`
+  helper now falls back to the bundle and names the file when neither copy exists.
+- **The first test harness lied.** `@($msg.tool_calls)` on a `null` is a one-element array, so
+  `coder` and `gptoss` were recorded as "made a tool call" and then failed on the follow-up with
+  `500 Missing tool call type: null`. The fix was to filter for a real `function` object and to
+  record `finish_reason`; both are now in the numbers above. Worth remembering: a test that reports
+  what you hoped for is worse than one that crashes.
+
+`bin\llm-selftest.ps1` grew two checks: every preset must carry `--mcp-servers-config` exactly when
+the registry asks for it, and `mcp\rea-mcp.json` must name an existing `command` and script with a
+timeout. It passes 9/9 (`-SkipBuild`: 7/7).
+
+The repository's own verifier now starts every preset *with* the flag, so it is a second, independent
+confirmation (`bin\llm-verify-bundle.ps1`, ~8 min):
+
+```
+preset  model                 port load_s gen_tps tool_call                         stopped
+coder   qwen2.5-coder-7b      8081 9.8    48.6    no                                yes
+coder36 qwen3.6-27b-a3b-coder 8085 19.5   26.6    get_weather({city:"Istanbul"})    yes
+flint   flint-nvfp4-40b       8080 30.9   19.3    get_weather({city:"Istanbul"})    yes
+gemma4  gemma-4-e4b           8083 14.3   65.2    get_weather({city:"Istanbul"})    yes
+gptoss  gpt-oss-20b           8082 20.6   18.8    no                                yes
+qwen3   qwen3-8b              8081 14.3   39.8    get_weather({city:"Istanbul"})    yes
+qwen36  qwen3.6-35b-a3b       8084 31.8   27.3    get_weather({city:"Istanbul"})    yes
+```
+
+Every preset loads, answers and releases the GPU. Its `gen_tps` is lower than the numbers in the
+README because it measures a 300-token run from a cold card, ramp included — the same mistake
+§`how-the-numbers-were-made` describes; the warm-up-measured figures elsewhere are the real ones.
+
+Two slips worth recording, both caught by running the thing rather than reading it:
+
+- **The launcher build failed silently the first time.** `llm-direct.ps1` already had a `coder36` key
+  in its `$friendly` map; adding a second one is a *parse* error (duplicate constant key), so the
+  script threw, the old 28 KB `llama-direct.exe` stayed on disk, and `bin\llm-selftest.ps1` reported
+  "ok built" because it builds into `%TEMP%` and never looked at the Desktop copy. The executable's
+  timestamp was the tell. Fixed the duplicate, rebuilt, and re-checked by scanning the compiled
+  argument strings for the flag — 5 occurrences, one per tool-capable model.
+- **The bundle builder ran the MCP step before it had parsed the registry.** The block sat above the
+  `$entries` loop, so `$entries` was empty, the condition was false, and no `mcp\` folder was written
+  while the presets still referenced it. The output line was missing, which is why it was noticed.
+  Moved below the preset generation; the line `mcp: rea-mcp.json (REA tools as rea_* in the Web UI)`
+  is now part of the build's output contract.
+
+Final walk-through of the primary path, the GUI one, with the rebuilt binary (the tool counts here
+were the 255 of Phase 8, before the scope below):
+
+```
+llama-direct.exe --start gemma4     -> healthy after 8 s, command line carries the flag
+GET  /tools                         -> 255 rea_* entries
+POST /v1/chat/completions + tools   -> finish_reason=tool_calls, rea_binary_session {"detail":"summary"}
+POST /tools                         -> REA 6.9.0, 255 tools, client llama.cpp/1.0
+llama-direct --stop                 -> process gone, VRAM released
+```
+
+---
+
+## Phase 8b (2026-11-13) — the catalog was the bug, and it cost a chat
+
+Phase 8 shipped the tools and verified the loop. It never asked what the catalog *costs*, and the
+first real prompt in the Web UI answered:
+
+```
+request (85210 tokens) exceeds the available context size (32768 tokens), try increasing it
+```
+
+Reproduced exactly, second attempt, on `coder36`: all 255 advertised tools in one request =
+**85 098** prompt tokens against a 32 768 window. The tools were never the problem; advertising 255
+schemas by default was.
+
+**What was measured** (one request carrying every tool of a scope, prompt tokens read back from the
+server — `bin\llm-mcptest.ps1 -Scope <name>` repeats it):
+
+| scope | tools | qwen3 16k | gemma4 131k |
+|---|--:|--:|--:|
+| `session,enhanced` | 39 | 12 402 | 8 604 |
+| `direct,enhanced` | 56 | 10 607 | 8 191 |
+| `session,direct,enhanced` | 80 | — | 14 090 |
+| all 255 | 255 | 85 098 | 63 800 |
+
+Two corrections worth keeping, because both would have produced a wrong release note:
+
+- **Schema bytes / tokenizer counts over-estimate by ~2×.** The first pass counted the raw
+  `tools/list` JSON through `llama-tokenize` (143 270–155 093 tokens for 255 tools). The request the
+  server actually builds is about half that, because the chat template renders the schemas more
+  compactly. Only the number `llama-server` writes into `usage.prompt_tokens` counts; the tokenizer
+  pass was thrown away.
+- **A plain `max_tokens: 64` cannot test tool calling on `qwen36`/`coder36`.** They reason first, so
+  the budget ran out mid-thought (`finish_reason=length`, no `tool_calls`) and the harness called a
+  healthy model broken. 512 is the floor for those two.
+
+**What changed**
+
+- `mcp\rea-mcp.json` now declares `REA_MCP_TOOL_FAMILIES=session,enhanced` — 39 tools, the smallest
+  scope that can still open a target (`open_binary`/`binary_session`) and analyze it
+  (`analyze_function`, `decompile_all`, `batch_decompile`, `binary_overview`, `get_call_graph`,
+  `find_xrefs`, `trace_*`). `-Families` widens it, `-Full` restores 255 and prints a warning.
+- **`qwen3` lost its tools.** 12 402 of its 16 384 tokens is not a catalog, it is the whole chat: the
+  tool result the model would have to read no longer fits. Four presets carry `Mcp = 'rea'` now.
+  `qwen3` still calls tools fine — it just cannot afford REA's.
+- `bin\llm-ctxfit.ps1` prints the measured table per preset (`FIT` / `TIGHT` / `OVER`) and, with
+  `-Check`, exits 1 if a tool preset cannot hold its catalog with half its window left. The
+  self-test runs it, so the 255-tool default cannot come back quietly.
+- `bin\llm-mcptest.ps1` starts a preset, sends every advertised tool in one request, reports the
+  prompt cost, then forces a `rea_binary_session` call and executes it through `POST /tools`.
+
+Verified on the two tightest tool presets, end to end:
+
+```
+qwen36  39 tools  12 524 / 20 480  (7 956 left)  rea_binary_session({"detail":"summary"})  2.6 s
+gemma4  39 tools   8 630 / 131 072 (122 442 left) same call                               2.3 s
+coder36 all 255    85 098 / 32 768  -> reproduce the user's error, then fix it
+```
+
+---
+
 ## How to verify any of this
 
 ```powershell

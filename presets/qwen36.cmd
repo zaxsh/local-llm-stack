@@ -8,6 +8,7 @@ taskkill /IM llama-server.exe /F >nul 2>&1
 echo.
 echo   qwen36  ->  http://127.0.0.1:8084/
 echo   model id: qwen3.6-35b-a3b    context: 20480    n-cpu-moe: 30
+echo   tools: rea  (REA - pick them per chat in the Web UI)
 echo.
 echo   The chat page opens in your browser in a few seconds. Ctrl+C here to stop.
 echo.
@@ -23,4 +24,5 @@ start "" cmd /c "timeout /t 8 >nul & start http://127.0.0.1:8084"
   --jinja --metrics --no-warmup ^
   -t 16 -tb 16 ^
   -ngl 99 -fa on -ctk f16 -ctv f16 ^
-  --n-cpu-moe 30
+  --n-cpu-moe 30 ^
+  --mcp-servers-config mcp\rea-mcp.json
