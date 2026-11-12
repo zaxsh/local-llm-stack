@@ -381,5 +381,10 @@ foreach ($g in $byModel) {
     Write-Log ("  {0,-9} clock drift over the run: {1:+0.0;-0.0}% ({2:N1} -> {3:N1} t/s at 512 tok)" -f $g.Name, $sh.drift, $sh.tps, $sh.post)
 }
 
-$verdicts | ConvertTo-Json -Depth 4 | Set-Content (Join-Path (Split-Path $Out) 'stability-verdicts.json')
+# The verdicts JSON is owned by llm-stability-report.ps1, not by this script: it recomputes from
+# the CSV so the file, the README table and the log can never disagree about what was measured.
+$report = Join-Path $bin 'llm-stability-report.ps1'
+if (Test-Path $report) {
+    & pwsh -NoProfile -File $report -Out $Out -JsonOut (Join-Path (Split-Path $Out) 'stability-verdicts.json') | Out-Null
+}
 Write-Log ("done; csv {0}" -f $Out)
