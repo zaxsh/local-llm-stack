@@ -361,3 +361,19 @@ cd C:\Users\fih\llm
 
 Every raw number is in `results\` here and in `bench\` in the repository. Nothing in the documents is
 a number that cannot be traced to one of those files.
+
+---
+
+## Shipped
+
+| when | what |
+|---|---|
+| 2026-11-11 21:35 | repository published: `zaxsh/local-llm-stack`, v1.0.0 |
+| 2026-11-11 23:34 | v1.1.0 — coder36, the two tool fixes, the guide |
+| 2026-11-12 06:21 | v1.2.0 — the capability battery, the measured results, the one-folder Desktop |
+
+Release assets follow the same shape every time: `llama-direct.exe` (the compiled launcher),
+`local-llm-stack-vX.Y.Z.zip` (the repository without weights or engine) and `SHA256SUMS.txt`.
+CI runs on every push: the scripts parse, the registry and catalogue agree, the presets match, the
+capability suite is well formed, the launcher builds and answers `--list`, and the graders accept their
+own gold answers.
