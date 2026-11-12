@@ -354,3 +354,45 @@ gh release create v1.0.1 --title "..." --notes-file NOTES.md dist\llama-direct.e
    contains four consecutive quotes. Check the running process with
    `(Get-CimInstance Win32_Process -Filter "Name='llama-server.exe'").CommandLine` when a model
    behaves oddly: the real command line is the ground truth, not the intent.
+
+## 10. Capability measured, not just speed (2026‑11‑12 06:10)
+
+The repository could say how fast each model is and nothing about whether it is any good. That is now
+measured: `bin/llm-eval.ps1` runs 36 items over eight categories, `bin/llm-eval.py` grades every reply by
+program, `bench/capability-suite-v1.json` holds the items and the answer key, and
+`docs/capability-evaluation.md` holds the results and what they cannot support.
+
+| model | macro | math | logic | code | instr | json | needle | tools | knowledge | budget hits |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| flint | 100.0 | 6/6 | 5/5 | 4/4 | 6/6 | 3/3 | 3/3 | 3/3 | 6/6 | 0 |
+| gemma4 | 97.9 | 6/6 | 5/5 | 4/4 | 5/6 | 3/3 | 3/3 | 3/3 | 6/6 | 0 |
+| qwen3 | 97.9 | 6/6 | 5/5 | 4/4 | 5/6 | 3/3 | 3/3 | 3/3 | 6/6 | 0 |
+| coder | 95.8 | 5/6 | 5/5 | 4/4 | 5/6 | 3/3 | 3/3 | 3/3 | 6/6 | 0 |
+| coder36 | 85.4 | 5/6 | 5/5 | 2/4 | 5/6 | 3/3 | 2/3 | 3/3 | 6/6 | 5 |
+| qwen36 | 78.1 | 6/6 | 5/5 | 1/4 | 2/6 | 3/3 | 2/3 | 3/3 | 6/6 | 8 |
+| gpt-oss | 67.7 | 6/6 | 5/5 | 1/4 | 1/6 | 3/3 | 3/3 | 0/3 | 6/6 | 5 |
+
+Three findings that should change how the stack is used:
+
+1. **Speed and capability are effectively uncorrelated here** (rank correlation 0.2 over seven models).
+   Speed is bytes-per-token, capability is weights and serving.
+2. **The bottom three are the three that think before answering.** They hit their output budget on
+   5, 8 and 5 items respectively; on `code-2` coder36 and qwen36 each spent 4,800 tokens and returned an
+   **empty reply**. For short, format-sensitive work the direct-answering models are the better tool.
+3. **gpt-oss is mis-served on this build**, not (necessarily) weak: its analysis channel leaks into the
+   content field. Re-measure it after the template is fixed.
+
+### Traps this run produced, all caught by the harness testing itself
+
+- **A thinking model needs budget or you are measuring the ceiling.** qwen3 scored 80.2 on the first
+  pass and 93.8 on the same items with three times the headroom. Every category that truncated was re-run
+  for **all** models, and `finish_reason == length` is recorded per item as `budget_exhausted`.
+- **Never re-grade from a stored reply that was truncated.** Truncating replies at 1,200 characters for
+  storage, then re-grading them offline, silently flipped six items and invented a 4-point regression.
+  Replies are now stored whole.
+- **The `ANSWER:` contract makes a code answer appear twice.** The first extractor concatenated both
+  copies and reported `SyntaxError` — a harness bug that looks exactly like a model that cannot code.
+  The extractor now cuts at the marker.
+- **A cleanup glob ate the task suite.** `Remove-Item bench\eval-*.json` matched `eval-suite-v1.json`
+  and deleted the 36 items. The suite is now `bench/capability-suite-v1.json`, which no result glob
+  matches, and `llm-selftest.ps1` checks it parses, has unique ids and gives every code item tests.

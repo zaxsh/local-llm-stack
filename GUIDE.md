@@ -46,7 +46,7 @@ Consequences that shape every script: nothing may require admin, paths must be d
 and every client kills the previous server before starting its own.
 
 Engine: **llama.cpp b12255**, CUDA 12.4 build plus the CUDA 13.5 runtime pack, from
-`ggml-org/llama.cpp` releases, installed at `%USERPROFILE%\Desktop\llama.cpp`. It already contains
+`ggml-org/llama.cpp` releases, installed at `%USERPROFILE%\Desktop\Local-LLM-Project\llama.cpp`. It already contains
 `qwen35moe` (checked by grepping `llama.dll`), so it runs every model in this repository.
 
 ## 3. The invariant: one registry, everything else derived
@@ -64,7 +64,7 @@ it in would start a server).
 
 ```
 bin/llm-up.ps1  ──registry──┬─→ presets\<key>.cmd        (bin/llm-desktop.ps1)
-                            ├─→ Desktop\llama.cpp\*      (bin/llm-desktop.ps1)
+                            ├─→ Desktop\Local-LLM-Project\llama.cpp\*   (bin/llm-desktop.ps1)
                             ├─→ llama-direct.exe         (bin/llm-direct.ps1, compiles the list in)
                             ├─→ README tables            (by hand, from measured numbers)
                             └─→ bin/llm-selftest.ps1     (asserts all of the above agree)
@@ -101,6 +101,9 @@ sha256 of the file that was benchmarked, and whether the local copy is byte-iden
 | `bin/connect-*.ps1`, `bin/llm-claude.ps1` | point Claude Code / dsh-tui / any OpenAI client at a running model |
 | `get-started.ps1` | the front door: machine check → engine → models → bundle → launch |
 | `bin/llm-scenarios.ps1` | runs realistic prompts and writes a Markdown report |
+| `bin/llm-eval.ps1` + `bin/llm-eval.py` | **the capability battery**: 36 graded tasks, eight categories, Wilson intervals. `-Report` re-aggregates without running anything |
+| `bench/eval-suite-v1.json` | the items themselves, with gold answers so the grader can prove itself |
+| `bench/eval-<key>.json` | every item: verdict, raw reply, finish reason, tokens, seconds |
 | `presets/*.cmd` | **generated**. Double-click to serve one model on its port |
 | `bench/*.csv` | every measurement, kept. This is the evidence behind the numbers |
 | `docs/PROJECT-CONTEXT.md` | the human-facing story of how the machine behaved |
@@ -123,10 +126,26 @@ No number in this repository came from a spec sheet or an estimate. The protocol
    working — that is exactly how qwen36 lost 24576 and had to be set to 20480.
 3. **Speed** — tokens/s from the server's own `--metrics` on that same 250–300 token generation,
    with `-fa on -ctk f16 -ctv f16`, `-ngl 99`, `-t/-tb` at 16 or 20.
-4. Everything lands in `bench/*.csv`. If a number is in the README, there is a CSV behind it.
+4. **Capability** - `llm-eval.ps1` runs 36 items over eight categories and grades every one by program
+   (exact value, regex, JSON schema, or *executing* unit tests). No judge model. The grader is tested
+   against its own gold answers before any model runs, and CI re-tests it on every push.
+5. Everything lands in `bench/*.csv` and `bench/eval-*.json`. If a number is in the README, there is a file
+   behind it.
 
 **Never** quote `/health` as proof that a model works, and never extrapolate a context ceiling from
 free VRAM. Both have already produced wrong answers here.
+
+Two more rules that the capability run made obvious, and they apply to every measurement here:
+
+- **Give a thinking model room, or you are timing its budget, not its ability.** At 1800 output tokens
+  the models that reason first scored 13 points below what they scored when the same items were re-run
+  with three times the headroom - qwen3 went from 80.2 to 93.8 on identical questions. Record
+  `finish_reason`, count the truncations, and re-run the affected categories for *every* model rather
+  than explaining the difference away afterwards.
+- **A benchmark tool is code, and its bugs look like findings.** A rule written as `lines==3` instead of
+  `lines`, a JSON parser that sliced from the first brace to the last and so failed on any trailing
+  prose, and a cleanup glob (`eval-*.json`) that deleted the task suite itself - all three happened in
+  one evening, and all three were caught by testing the tool against its own gold answers.
 
 ## 6. What is measured today
 
@@ -219,7 +238,7 @@ pwsh -NoProfile -File .\bin\llm-selftest.ps1        # 7 checks: scripts, registr
 pwsh -NoProfile -File .\bin\llm-verify-bundle.ps1
 
 # what does the launcher see?
-& "$env:USERPROFILE\Desktop\llama.cpp\llama-direct.exe" --list
+& "$env:USERPROFILE\Desktop\Local-LLM-Project\llama-direct.exe" --list
 
 # re-measure one model's split or ceiling
 pwsh -NoProfile -File .\bin\llm-ncmoe-sweep.ps1 -Model .\models\<file>.gguf -Values '26 28 30' -Ctx 32768
@@ -306,6 +325,18 @@ Each of these cost real time. Do not rediscover them.
     filename/port/alias, so a newly registered model was reported "not downloaded" while it sat in
     `models\` and served fine. If a script needs the file name, port or alias, it parses
     `llm-up.ps1` — that is the rule, and the self-test only checks some of the files that follow it.
+18. **A `param()` default cannot call a command.** `[string]$X = Join-Path $a b` is a parse error
+    ("missing expression after '='") because defaults are expressions, not statements. Use
+    `"$env:USERPROFILE\..."`, or compute it in the body.
+19. **A rebuild that cannot write its output used to look successful.** With the launcher window open,
+    Windows locks the exe, `csc` fails with "cannot write output file", and the old `Test-Path` guard
+    passed anyway - so the script printed "built" over the *previous* binary and the fix appeared
+    applied. `llm-direct.ps1` now compiles to a staging path, checks the timestamp, and refuses to
+    claim success while the window is open.
+20. **`-Only a,b,c` binds as an array, and `[string]` refuses it.** Call a script with unquoted commas
+    and a `[string]` parameter throws "cannot convert System.Object[]"; call it through `pwsh -File`
+    and the same parameter arrives as one string. Declare `[string[]]` and normalise with
+    `($P -join ',') -split '[,\s]+'` so both call styles work.
 
 ## 11. House rules (how this repository is written)
 

@@ -1,8 +1,10 @@
 name: ci
 
 # No GPU and no model files are needed for any of this: it parses every script, checks that the
-# registry, the catalogue and the presets still describe the same six models, and compiles the
-# launcher with the .NET Framework compiler that ships with Windows.
+# registry, the catalogue and the presets still describe the same seven models, compiles the
+# launcher with the .NET Framework compiler that ships with Windows, and proves that the capability
+# suite's graders accept their own gold answers - a benchmark with a broken extractor scores every
+# model zero, and the zero looks like a finding.
 on:
   push:
     branches: [main]
@@ -43,6 +45,13 @@ jobs:
           Get-Content $out
           if ($p.ExitCode -ne 0) { throw "llama-direct.exe --list exited $($p.ExitCode)" }
           if (-not (Get-Content $out)) { throw "--list printed nothing" }
+
+      - name: the grader accepts its own gold answers
+        shell: pwsh
+        run: |
+          python bin/llm-eval.py --self-test --url http://127.0.0.1:1/v1 --alias none `
+            --out $env:RUNNER_TEMP/eval-self-test.json
+          if ($LASTEXITCODE -ne 0) { throw "the grader rejected a gold answer" }
 
       - uses: actions/upload-artifact@v4
         with:

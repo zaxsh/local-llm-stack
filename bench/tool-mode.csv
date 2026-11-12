@@ -1,0 +1,8 @@
+"model","finish","native","call"
+"gemma4","tool_calls","yes","get_weather({""city"":""Ankara"",""when"":""right now""})"
+"qwen3","tool_calls","yes","get_weather({""city"": ""Ankara"", ""when"": ""now""})"
+"coder","stop","no","{""name"": ""get_weather"", ""arguments"": {""city"": ""Ankara"", ""when"": ""now""}}"
+"flint","tool_calls","yes","get_weather({""city"":""Ankara""})"
+"gptoss","length","no","Sure, I can help you with that. The... We have a conversation. The user asks: ""What is the"
+"coder36","tool_calls","yes","get_weather({""city"":""Ankara"",""when"":""right now""})"
+"qwen36","tool_calls","yes","get_weather({""city"":""Ankara""})"

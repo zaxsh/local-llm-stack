@@ -34,7 +34,7 @@ git clone https://github.com/zaxsh/local-llm-stack ; cd local-llm-stack
 ```
 
 That checks the machine, downloads the pinned llama.cpp build (~715 MB) and whichever models are
-missing (~75 GB, resumable), builds `Desktop\llama.cpp`, and opens the launcher. It skips whatever is
+missing (~75 GB, resumable), builds `Desktop\Local-LLM-Project\llama.cpp`, and opens the launcher. It skips whatever is
 already done, so it is also how you rebuild after changing a preset.
 
 You supply: Windows 10/11, an NVIDIA GPU (8 GB+ for the two big ones),
@@ -69,12 +69,12 @@ Prefer to drive it by hand?
 |---|---|
 | `get-started.ps1` | clone to running model, in one command |
 | `GUIDE.md` | **for an agent picking this up cold**: the method, the current state, the traps, what to do next |
-| `bin\` | 25 scripts: registry, fetcher, bundle builder, launcher builder, benchmarks, self-test, agent connectors |
+| `bin\` | 27 scripts: registry, fetcher, bundle builder, launcher builder, benchmarks, the capability battery, self-test, agent connectors |
 | `models.manifest.json` | the catalogue: repo, file, exact size, sha256 per model |
 | `presets\` | the tuned flags for all seven models, readable without running anything |
 | `launchers\` | the Desktop shortcuts |
 | `docs\` | the results, the method, the project state, the client wiring guide |
-| `bench\` | the CSVs the numbers came from |
+| `bench\` | the CSVs the numbers came from, and `bench\capability-suite-v1.json` — the graded task battery |
 | `.github\workflows\ci.yml` | parses every script, checks the catalogue, compiles the launcher |
 
 The engine and the weights are **not** in the repository: `get-started.ps1` fetches the build,
@@ -556,7 +556,7 @@ The id is `--alias`, not the filename — that is why it stays stable when a fil
 calls), but it runs one layer away from not fitting: `-n-cpu-moe 30` at 16k context. 29 fails to
 load, and so does 32k context. Measured alternative configurations, including why its MTP
 speculative-decoding head is present but unusable on an 8 GB card, are in
-`Desktop\how-the-numbers-were-made.md` Part 8.
+`Desktop\Local-LLM-Project\docs\how-the-numbers-were-made.md` Part 8.
 
 ### dsh-tui (native path, no proxy)
 
@@ -615,7 +615,7 @@ empty, which looks exactly like a broken server or a broken shim. Give them 800+
 
 `gemma-4-e4b` is the default for a reason: fastest generation, lowest first-token latency, native
 tool calls, and only 3.8 GB of VRAM. `llm-scenarios.ps1` re-measures all of the above with six
-ordinary user prompts and writes a report to the Desktop.
+ordinary user prompts and writes a report to `Desktop\Local-LLM-Project\docs\`.
 
 ---
 
@@ -647,7 +647,7 @@ cd C:\Users\fih\llm\bin
 whatever is already on the card first, because only one model fits in 8 GB.
 
 The long-form version, with the failure modes and a troubleshooting table, is
-`Desktop\connecting-local-models.md`.
+`Desktop\Local-LLM-Project\docs\connecting-local-models.md`.
 
 ### Speculative decoding on this build
 
@@ -673,13 +673,13 @@ does need VRAM. It only exists on GGUFs that ship the head (look for `-mtp` in t
 
 Speculation is only a win when the guess is cheap and correct. On an 8 GB card the memory it
 steals is worth more than the tokens it saves. The full sweep is in
-`Desktop\how-the-numbers-were-made.md` Part 8.
+`Desktop\Local-LLM-Project\docs\how-the-numbers-were-made.md` Part 8.
 
 ---
 
 ## 13. The Desktop bundle
 
-`bin\llm-desktop.ps1` builds a self-contained `Desktop\llama.cpp`:
+`bin\llm-desktop.ps1` builds a self-contained `Desktop\Local-LLM-Project\llama.cpp`:
 
 ```powershell
 cd C:\Users\fih\llm
@@ -701,7 +701,7 @@ regenerates them.
 ### `llama-direct.exe`
 
 `bin\llm-direct.ps1` compiles a 26 KB WinForms window (with the .NET Framework `csc.exe` that
-ships with Windows) and drops it in the bundle and on the Desktop. The model list, the download
+ships with Windows) and drops it in the bundle and in `Desktop\Local-LLM-Project\`. The model list, the download
 sources and the measured flags are compiled into it, so it needs nothing else to run:
 
 ```powershell
@@ -872,3 +872,42 @@ llama-direct.exe --stop              # free the GPU
 to borrow the caller's when given a command line, and stays silent when double-clicked. Models
 missing from `models\` appear greyed out in the window with their size, and the Download button is
 disabled for anything already present — a working copy from a different uploader counts as present.
+
+---
+
+## 16. Capability: what each model can actually do
+
+Speed says how fast an answer arrives. It says nothing about whether the answer is right — and on
+this machine the fastest big model is not the smartest, because speed here is decided by bytes read
+per token rather than by parameter count.
+
+`bin\llm-eval.ps1` runs a 36-item battery over eight categories — maths, logic, code, instruction
+following, JSON extraction, long-context retrieval, tool calling, and factual knowledge — and grades
+every answer with a program: exact values, regex predicates, JSON schemas, and for the code items by
+**executing unit tests** the model never sees. There is no judge model, and CI proves on every push
+that the graders still accept their own gold answers.
+
+```powershell
+.\bin\llm-eval.ps1                      # all seven models
+.\bin\llm-eval.ps1 -Models coder36      # one model
+.\bin\llm-eval.ps1 -Report              # re-aggregate what is in bench\, run nothing
+```
+
+Measured here on 2026-11-12, all seven models, 36 items each:
+
+| model | macro | the short version |
+|---|--:|---|
+| flint | 100.0 | did not miss an item; 29.8 t/s, 49k context |
+| gemma4 | 97.9 | 4B, 131k context, 74.5 t/s — the best speed/capability point |
+| qwen3 | 97.9 | 8B, thinks, still lands every category but one |
+| coder | 95.8 | 4/4 code, 3/3 tools, 50.3 t/s |
+| coder36 | 85.4 | 5 items hit the token ceiling, including two code items with an *empty* reply |
+| qwen36 | 78.1 | 8 items hit the ceiling; 2/6 instruction following at these budgets |
+| gpt-oss | 67.7 | 0/3 tools and 1/6 instructions — its analysis channel leaks into the content field on this build |
+
+Rank correlation between speed and capability across these seven: **0.2**. The fastest model is not the
+smartest, and the slowest is not either. The full results, the method, and what the battery cannot tell
+you are in [docs/capability-evaluation.md](docs/capability-evaluation.md). Read that before quoting a
+number: six items per category means wide intervals, and a model that thinks for long enough hits its
+token budget before it writes an answer, which is reported as a `budget hit` rather than quietly
+scored as wrong.

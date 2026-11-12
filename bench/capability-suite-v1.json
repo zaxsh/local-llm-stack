@@ -1,0 +1,433 @@
+{
+  "name": "local-capability-v1",
+  "version": 1,
+  "notes": "36 items, eight categories, every score programmatic - no judge model, no human. Items are written for this repository rather than taken from a published benchmark, so contamination is unlikely and the answer key is auditable in this file. ANSWER: extraction means a model that reasons correctly but writes prose still scores; code items are graded by executing unit tests, not by matching text. Budgets are identical for every model, and deliberately generous for the categories where a thinking model spends tokens before it starts answering.",
+  "suffix": "\n\nThink as much as you need. Finish with a final line of exactly this form:\nANSWER: <your answer>",
+  "items": [
+    {
+      "id": "math-1",
+      "category": "math",
+      "kind": "numeric",
+      "max_tokens": 1800,
+      "prompt": "A shop sells notebooks at 3 for $7. How much do 15 notebooks cost? Give the number of dollars.",
+      "answer": 35
+    },
+    {
+      "id": "math-2",
+      "category": "math",
+      "kind": "numeric",
+      "max_tokens": 1800,
+      "prompt": "A train leaves at 9:45 and arrives at 13:20 the same day. How many minutes is the trip?",
+      "answer": 215
+    },
+    {
+      "id": "math-3",
+      "category": "math",
+      "kind": "numeric",
+      "max_tokens": 1800,
+      "prompt": "Ali has 48 marbles. He gives one quarter of them to his sister, then buys 9 more. How many marbles does he have now?",
+      "answer": 45
+    },
+    {
+      "id": "math-4",
+      "category": "math",
+      "kind": "numeric",
+      "max_tokens": 1800,
+      "prompt": "A rectangle measures 12 cm by 5 cm. What is the length of its diagonal, in cm?",
+      "answer": 13
+    },
+    {
+      "id": "math-5",
+      "category": "math",
+      "kind": "numeric",
+      "max_tokens": 1800,
+      "prompt": "One pipe fills a tank in 6 hours. A second pipe fills the same tank in 3 hours. If both run together, how many hours does it take?",
+      "answer": 2
+    },
+    {
+      "id": "math-6",
+      "category": "math",
+      "kind": "numeric",
+      "max_tokens": 1800,
+      "prompt": "What is the sum of the first 20 positive integers (1 through 20)?",
+      "answer": 210
+    },
+    {
+      "id": "logic-1",
+      "category": "logic",
+      "kind": "choice",
+      "max_tokens": 1800,
+      "prompt": "All roses are flowers. Some flowers fade quickly. Which statement follows logically?\n(A) All roses fade quickly\n(B) Some roses fade quickly\n(C) Nothing follows about whether roses fade quickly\n(D) No roses fade quickly",
+      "answer": "C"
+    },
+    {
+      "id": "logic-2",
+      "category": "logic",
+      "kind": "choice",
+      "max_tokens": 1800,
+      "prompt": "Anna is taller than Ben. Ben is taller than Carla. Dan is taller than Anna. Who is the shortest?\n(A) Anna\n(B) Ben\n(C) Carla\n(D) Dan",
+      "answer": "C"
+    },
+    {
+      "id": "logic-3",
+      "category": "logic",
+      "kind": "choice",
+      "max_tokens": 1800,
+      "prompt": "If today is Wednesday, what day of the week will it be 100 days from now?\n(A) Monday\n(B) Tuesday\n(C) Thursday\n(D) Friday",
+      "answer": "D"
+    },
+    {
+      "id": "logic-4",
+      "category": "logic",
+      "kind": "choice",
+      "max_tokens": 1800,
+      "prompt": "On an island, knights always tell the truth and knaves always lie. A says: 'B and I are both knaves.' What are A and B?\n(A) Both are knights\n(B) A is a knight, B is a knave\n(C) A is a knave, B is a knight\n(D) Both are knaves",
+      "answer": "C"
+    },
+    {
+      "id": "logic-5",
+      "category": "logic",
+      "kind": "numeric",
+      "max_tokens": 1800,
+      "prompt": "In a class of 30 students, 18 play football, 20 play basketball, and 5 play neither. How many play both?",
+      "answer": 13
+    },
+    {
+      "id": "code-1",
+      "category": "code",
+      "kind": "code",
+      "max_tokens": 1600,
+      "entry": "reverse_words",
+      "prompt": "Write a Python function `reverse_words(s)` that reverses the order of the words in a string and collapses any run of whitespace between words to a single space, with no leading or trailing space. Reply with one ```python code block and nothing else.",
+      "tests": [
+        "assert reverse_words('hello world') == 'world hello'",
+        "assert reverse_words('  a  b ') == 'b a'",
+        "assert reverse_words('one') == 'one'"
+      ],
+      "gold": "def reverse_words(s):\n    return ' '.join(s.split()[::-1])"
+    },
+    {
+      "id": "code-2",
+      "category": "code",
+      "kind": "code",
+      "max_tokens": 1600,
+      "entry": "is_palindrome",
+      "prompt": "Write a Python function `is_palindrome(s)` that returns True if the string reads the same forwards and backwards, ignoring case and ignoring every character that is not a letter or a digit. Reply with one ```python code block and nothing else.",
+      "tests": [
+        "assert is_palindrome('A man, a plan, a canal: Panama') is True",
+        "assert is_palindrome('abc') is False",
+        "assert is_palindrome('') is True"
+      ],
+      "gold": "def is_palindrome(s):\n    t = ''.join(c.lower() for c in s if c.isalnum())\n    return t == t[::-1]"
+    },
+    {
+      "id": "code-3",
+      "category": "code",
+      "kind": "code",
+      "max_tokens": 1600,
+      "entry": "fib",
+      "prompt": "Write a Python function `fib(n)` that returns the n-th Fibonacci number with fib(0) == 0 and fib(1) == 1. It must work for n up to 30 without excessive recursion. Reply with one ```python code block and nothing else.",
+      "tests": [
+        "assert fib(0) == 0",
+        "assert fib(1) == 1",
+        "assert fib(10) == 55",
+        "assert fib(30) == 832040"
+      ],
+      "gold": "def fib(n):\n    a, b = 0, 1\n    for _ in range(n):\n        a, b = b, a + b\n    return a"
+    },
+    {
+      "id": "code-4",
+      "category": "code",
+      "kind": "code",
+      "max_tokens": 1600,
+      "entry": "merge_intervals",
+      "prompt": "Write a Python function `merge_intervals(intervals)` that takes a list of [start, end] pairs and returns a new list with all overlapping or touching intervals merged, sorted by start. Reply with one ```python code block and nothing else.",
+      "tests": [
+        "assert merge_intervals([[1,3],[2,6],[8,10],[15,18]]) == [[1,6],[8,10],[15,18]]",
+        "assert merge_intervals([[1,4],[4,5]]) == [[1,5]]",
+        "assert merge_intervals([]) == []"
+      ],
+      "gold": "def merge_intervals(intervals):\n    if not intervals:\n        return []\n    out = []\n    for s, e in sorted(intervals):\n        if out and s <= out[-1][1]:\n            out[-1][1] = max(out[-1][1], e)\n        else:\n            out.append([s, e])\n    return out"
+    },
+    {
+      "id": "instr-1",
+      "category": "instr",
+      "kind": "constraints",
+      "max_tokens": 500,
+      "prompt": "List exactly 3 benefits of exercise. Put each on its own line, each line starting with '- ' followed by the benefit, and write no other text at all.",
+      "constraints": [
+        {
+          "rule": "lines",
+          "value": 3
+        },
+        {
+          "rule": "every_line_matches",
+          "value": "^- .+"
+        },
+        {
+          "rule": "no_answer_tag",
+          "value": true
+        }
+      ],
+      "no_suffix": true,
+      "gold": "- better mood\n- stronger heart\n- more energy"
+    },
+    {
+      "id": "instr-2",
+      "category": "instr",
+      "kind": "constraints",
+      "max_tokens": 500,
+      "prompt": "What is the capital of France? Answer with exactly one word, in lowercase, with no punctuation and no other text.",
+      "constraints": [
+        {
+          "rule": "regex_full",
+          "value": "^paris$"
+        }
+      ],
+      "no_suffix": true,
+      "gold": "paris"
+    },
+    {
+      "id": "instr-3",
+      "category": "instr",
+      "kind": "constraints",
+      "max_tokens": 500,
+      "prompt": "Write one single sentence about rain that is exactly 12 words long. End it with a period and write nothing else.",
+      "constraints": [
+        {
+          "rule": "word_count",
+          "value": 12
+        },
+        {
+          "rule": "ends_with",
+          "value": "."
+        },
+        {
+          "rule": "no_answer_tag",
+          "value": true
+        }
+      ],
+      "no_suffix": true,
+      "gold": "The rain fell softly on the roof all through the long night."
+    },
+    {
+      "id": "instr-4",
+      "category": "instr",
+      "kind": "constraints",
+      "max_tokens": 500,
+      "prompt": "Reply with exactly this JSON object and nothing else, no code fence, no explanation: {\"ok\": true, \"count\": 3}",
+      "constraints": [
+        {
+          "rule": "json_equals",
+          "value": {
+            "ok": true,
+            "count": 3
+          }
+        }
+      ],
+      "no_suffix": true,
+      "gold": "{\"ok\": true, \"count\": 3}"
+    },
+    {
+      "id": "instr-5",
+      "category": "instr",
+      "kind": "constraints",
+      "max_tokens": 500,
+      "prompt": "Write the word hello five times, separated by commas and spaces, and write nothing else.",
+      "constraints": [
+        {
+          "rule": "regex_full",
+          "value": "^(hello, ?){4}hello$"
+        }
+      ],
+      "no_suffix": true,
+      "gold": "hello, hello, hello, hello, hello"
+    },
+    {
+      "id": "instr-6",
+      "category": "instr",
+      "kind": "constraints",
+      "max_tokens": 500,
+      "prompt": "In at most 5 words, all in capital letters, answer: what colour is a clear daytime sky?",
+      "constraints": [
+        {
+          "rule": "uppercase"
+        },
+        {
+          "rule": "max_words",
+          "value": 5
+        },
+        {
+          "rule": "contains",
+          "value": "BLUE"
+        }
+      ],
+      "no_suffix": true,
+      "gold": "THE SKY IS BLUE"
+    },
+    {
+      "id": "json-1",
+      "category": "json",
+      "kind": "json",
+      "max_tokens": 900,
+      "prompt": "Extract the order details into a JSON object with exactly these keys: order, customer, date, total, city. Use the values exactly as written, and make total a number.\n\nText: 'Order #A-1187 was placed by Priya Raman on 2026-03-04. The total came to $249.50 and it ships to Pune.'",
+      "answer": {
+        "order": "A-1187",
+        "customer": "Priya Raman",
+        "date": "2026-03-04",
+        "total": 249.5,
+        "city": "Pune"
+      },
+      "gold": "{\"order\": \"A-1187\", \"customer\": \"Priya Raman\", \"date\": \"2026-03-04\", \"total\": 249.50, \"city\": \"Pune\"}"
+    },
+    {
+      "id": "json-2",
+      "category": "json",
+      "kind": "json",
+      "max_tokens": 900,
+      "prompt": "Extract the alert fields into a JSON object with exactly these keys: level, code, service. Make code a number.\n\nText: '2026-03-04T11:02:19Z ERROR service=auth code=503 retry=3 msg=\"token endpoint timed out\"'",
+      "answer": {
+        "level": "ERROR",
+        "code": 503,
+        "service": "auth"
+      },
+      "gold": "{\"level\": \"ERROR\", \"code\": 503, \"service\": \"auth\"}"
+    },
+    {
+      "id": "json-3",
+      "category": "json",
+      "kind": "json",
+      "max_tokens": 900,
+      "prompt": "Extract a JSON object with exactly these keys: name, years_experience, skills. years_experience must be a number and skills a list of strings.\n\nText: 'Merve Yildiz is a backend engineer who has been writing Go and Python for 7 years, mostly building payment APIs.'",
+      "answer": {
+        "name": "Merve Yildiz",
+        "years_experience": 7,
+        "skills": [
+          "Go",
+          "Python"
+        ]
+      },
+      "gold": "{\"name\": \"Merve Yildiz\", \"years_experience\": 7, \"skills\": [\"Go\", \"Python\"]}"
+    },
+    {
+      "id": "needle-1",
+      "category": "needle",
+      "kind": "needle",
+      "max_tokens": 300,
+      "depth": 0.15,
+      "question": "What is the vault passphrase written earlier in the document? Reply with the passphrase only, exactly as written.",
+      "secret": "crimson otter 4471",
+      "target": "crimson otter 4471"
+    },
+    {
+      "id": "needle-2",
+      "category": "needle",
+      "kind": "needle",
+      "max_tokens": 300,
+      "depth": 0.55,
+      "question": "What is the vault passphrase written earlier in the document? Reply with the passphrase only, exactly as written.",
+      "secret": "amber falcon 8925",
+      "target": "amber falcon 8925"
+    },
+    {
+      "id": "needle-3",
+      "category": "needle",
+      "kind": "needle",
+      "max_tokens": 300,
+      "depth": 0.9,
+      "question": "What is the vault passphrase written earlier in the document? Reply with the passphrase only, exactly as written.",
+      "secret": "silver ibis 3307",
+      "target": "silver ibis 3307"
+    },
+    {
+      "id": "tools-1",
+      "category": "tools",
+      "kind": "tool",
+      "max_tokens": 300,
+      "prompt": "What is the weather in Ankara right now?",
+      "expect": {
+        "name": "get_weather",
+        "args": {
+          "city": "Ankara"
+        }
+      }
+    },
+    {
+      "id": "tools-2",
+      "category": "tools",
+      "kind": "tool",
+      "max_tokens": 300,
+      "prompt": "Find my notes about the Q3 budget review.",
+      "expect": {
+        "name": "search_notes",
+        "args": {
+          "query_contains": [
+            "q3",
+            "budget"
+          ]
+        }
+      }
+    },
+    {
+      "id": "tools-3",
+      "category": "tools",
+      "kind": "tool",
+      "max_tokens": 300,
+      "prompt": "How warm will it be in Izmir tomorrow?",
+      "expect": {
+        "name": "get_weather",
+        "args": {
+          "city": "Izmir"
+        }
+      }
+    },
+    {
+      "id": "know-1",
+      "category": "knowledge",
+      "kind": "choice",
+      "max_tokens": 1800,
+      "prompt": "Which gas do plants absorb from the air during photosynthesis?\n(A) oxygen\n(B) carbon dioxide\n(C) nitrogen\n(D) hydrogen",
+      "answer": "B"
+    },
+    {
+      "id": "know-2",
+      "category": "knowledge",
+      "kind": "choice",
+      "max_tokens": 1800,
+      "prompt": "In which year did the Second World War end in Europe?\n(A) 1943\n(B) 1944\n(C) 1945\n(D) 1946",
+      "answer": "C"
+    },
+    {
+      "id": "know-3",
+      "category": "knowledge",
+      "kind": "choice",
+      "max_tokens": 1800,
+      "prompt": "Which is the largest planet in the Solar System?\n(A) Saturn\n(B) Jupiter\n(C) Neptune\n(D) Earth",
+      "answer": "B"
+    },
+    {
+      "id": "know-4",
+      "category": "knowledge",
+      "kind": "choice",
+      "max_tokens": 1800,
+      "prompt": "Who wrote the novel 'One Hundred Years of Solitude'?\n(A) Jorge Luis Borges\n(B) Gabriel Garcia Marquez\n(C) Mario Vargas Llosa\n(D) Pablo Neruda",
+      "answer": "B"
+    },
+    {
+      "id": "know-5",
+      "category": "knowledge",
+      "kind": "choice",
+      "max_tokens": 1800,
+      "prompt": "Which of these numbers is NOT prime?\n(A) 91\n(B) 89\n(C) 97\n(D) 83",
+      "answer": "A"
+    },
+    {
+      "id": "know-6",
+      "category": "knowledge",
+      "kind": "choice",
+      "max_tokens": 1800,
+      "prompt": "What is the chemical symbol for potassium?\n(A) P\n(B) Po\n(C) K\n(D) Pt",
+      "answer": "C"
+    }
+  ]
+}

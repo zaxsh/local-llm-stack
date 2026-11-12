@@ -106,7 +106,33 @@ else {
     if ($checked -gt 0) { Pass "$checked presets agree with the registry" }
 }
 
+# ------------------------------------------------------------------ 3b. the capability suite
+Head "the capability suite is well formed"
+$suitePath = Join-Path $root 'bench\capability-suite-v1.json'
+if (-not (Test-Path $suitePath)) { Fail 'bench\capability-suite-v1.json' 'missing - the battery cannot run' }
+else {
+    try {
+        $suite = Get-Content $suitePath -Raw | ConvertFrom-Json
+        $items = @($suite.items)
+        $ids = @($items | ForEach-Object { $_.id })
+        $dup = @($ids | Group-Object | Where-Object { $_.Count -gt 1 })
+        $noKey = @($items | Where-Object {
+            $_.kind -in @('numeric', 'choice') -and $null -eq $_.answer -and -not $_.gold
+        })
+        $noTests = @($items | Where-Object { $_.kind -eq 'code' -and -not $_.tests })
+        $cats = @($items | ForEach-Object { $_.category } | Select-Object -Unique)
+        if ($dup.Count) { Fail 'suite ids' "duplicated: $(($dup | ForEach-Object { $_.Name }) -join ', ')" }
+        elseif ($noKey.Count) { Fail 'suite answers' "items with no answer: $(($noKey | ForEach-Object { $_.id }) -join ', ')" }
+        elseif ($noTests.Count) { Fail 'suite tests' "code items with no tests: $(($noTests | ForEach-Object { $_.id }) -join ', ')" }
+        elseif ($cats.Count -lt 8) { Fail 'suite categories' "expected 8, found $($cats.Count)" }
+        else { Pass "$($items.Count) items, $($cats.Count) categories, no duplicate ids, every code item has tests" }
+    } catch {
+        Fail 'bench\capability-suite-v1.json' "does not parse: $($_.Exception.Message)"
+    }
+}
+
 # ------------------------------------------------------------------ 4. the launcher builds
+
 Head "the launcher builds"
 if ($SkipBuild) { Write-Host "  --    skipped (-SkipBuild)" -ForegroundColor DarkGray }
 else {
