@@ -15,9 +15,9 @@ with a 131072-token context**, both on the same 8 GB card, one at a time.
 |---|--:|--:|--:|---|---|
 | **Gemma 4 E4B** QAT UD-Q4_K_XL | 4.2 GB | **74.1 t/s** | 131072 | yes | the default: fast, huge context, drives agents |
 | **Qwen3.6 35B-A3B** MoE UD-Q4_K_S | 21.7 GB | 35.3 t/s¹ | 40960 | yes | strongest answers that still fit |
-| **Qwen3.6 27B-A3B Coder** MoE Q4_K_M | 16.1 GB | 32.6 t/s¹ | 57344 | yes | code, with the best speed-per-capability here |
+| **Qwen3.6 27B-A3B Coder** MoE Q4_K_M | 16.1 GB | 37.7 t/s² | 57344 | yes | code, with the best speed-per-capability here |
 | **flint 40B** NVFP4 MoE | 22.9 GB | 29.8 t/s | 49152 | yes | longest context on a big model |
-| **gpt-oss 20B** MXFP4 | 13.8 GB | 30.8 t/s² | 32768 | no | chat only |
+| **gpt-oss 20B** MXFP4 | 13.8 GB | 30.3 t/s² | 32768 | no | chat only |
 | **Qwen3 8B** Q4_K_M | 5.2 GB | 59.0 t/s | 16384 | yes | small and quick, thinks first |
 | **Qwen2.5 Coder 7B** Q4_K_M | 4.7 GB | 50.3 t/s | 32768 | no | code, not agents |
 | **DeepSeek-Coder-V2-Lite** MAPLE Sub5GB | 4.5 GB | 65.1 t/s² | 18432 | no | 13.5B MoE in 4.5 GB — fastest coder here, but the quant is damaged: 17.7 % on the suite, experiments only |
@@ -33,7 +33,7 @@ arms. On that afternoon the card ran ~30 % below its best-day clocks — the *ol
 29.1 and 29.2 t/s on the same harness — so treat these two figures as a same-day comparison
 (+21 % and +12 % against the narrower window), not as a regression against the rows above.
 
-² Re-measured on the night of 2026-11-14 in the same A/B session as the two rows above
+² Measured on 2026-11-14 with `bin\llm-window-ab.ps1`, in the same session as the rows footnoted ¹
 (`bench\window-ab-*.csv`). Do not compare columns across footnotes: the absolute numbers move ±30 %
 with the card's clocks and the only valid comparison is the one printed in the linked CSV.
 
@@ -85,14 +85,15 @@ Prefer to drive it by hand?
 | `models.manifest.json` | the catalogue: repo, file, exact size, sha256 per model |
 | `presets\` | the tuned flags for all eight models, readable without running anything |
 | `launchers\` | the Desktop shortcuts |
-| `docs\` | the results, the method, the project state, the client wiring guide |
+| `docs\` | the results, the method, the project state, the client wiring guide, and `docs\START-HERE.md` (the one-minute version) |
 | `bench\` | the CSVs the numbers came from, and `bench\capability-suite-v1.json` — the graded task battery |
 | `.github\workflows\ci.yml` | parses every script, checks the catalogue, compiles the launcher |
 
 The engine and the weights are **not** in the repository: `get-started.ps1` fetches the build,
 `models.manifest.json` + `bin\llm-fetch.ps1` fetch the models. The code here is [MIT](LICENSE); the
 weights keep their own licences (Gemma terms of use, Apache-2.0 for the Qwen models, gpt-oss' own
-terms, flint NVFP4 from RecursiveSI) and are downloaded from their authors, never redistributed.
+terms, flint NVFP4 from RecursiveSI, the DeepSeek model licence for the MAPLE build) and are
+downloaded from their authors, never redistributed.
 `models.manifest.json` records where each file came from and what it was when it was measured.
 
 ## Contents
@@ -900,8 +901,8 @@ card, found by trial load — not by arithmetic:
 | `flint` | 49152 | 262144 | 29.8 t/s | none |
 | `coder` | 32768 | 32768 | 50.3 t/s | −4 % |
 | `dsv2` | 18432 | 163840 | 65.1 t/s | q8_0 KV: f16 dies at 10240, so the window needs the quantised cache |
-| `coder36` | 57344 | 262144 | 32.6 t/s | **+12 %** against 32768 (A/B, 2026-11-13); n-cpu-moe 30, 27 is a CUDA OOM |
-| `gptoss` | 32768 | 131072 | 30.8 t/s | 0.0 % against 24576 over 6 loads (A/B, 2026-11-14); n-cpu-moe 15, 14 is a CUDA OOM |
+| `coder36` | 57344 | 262144 | 37.7 t/s | 49152 → 57344 costs 1.3 % (A/B, 2026-11-14); n-cpu-moe 30, 27 is a CUDA OOM |
+| `gptoss` | 32768 | 131072 | 30.3 t/s | 0.0 % against 24576 over 6 loads (A/B, 2026-11-14); n-cpu-moe 15, 14 is a CUDA OOM |
 | `qwen36` | 40960 | 262144 | 35.3 t/s | **+21 %** against 20480 (A/B, 2026-11-13); n-cpu-moe 31, 32 crashed once |
 | `qwen3` | 16384 | 40960 | 59.0 t/s | — (20480 needs a q8_0 cache: it loads and then runs 5 % slower) |
 
