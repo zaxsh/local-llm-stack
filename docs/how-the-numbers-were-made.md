@@ -805,6 +805,21 @@ an A/B median, and the claim is "the wider window costs nothing", never "the mod
 | `flint` | 49152 / 40 | 57344 / 40 | 34.0 | 29.3 | refused, −13.8 % |
 | `gptoss` | **32768 / 15** | 24576 / 14 | 30.3 | 30.3 | taken, 0.0 % over six loads |
 | `qwen3` | 16384 / f16 | 20480 / q8_0 | 55.5 | 52.5 | refused (same window) |
+| `dsv2` | **18432 / q8_0** | 8192 / f16 | 65.1 | 58.0 | taken: +12.2 % and 2.25× the window (arms in ship order) |
+| `gemma4` | 131072 / 0 | — | — | — | no candidate: at the declared maximum, `n-cpu-moe` already 0 |
+| `coder` | 32768 / 0 | 49152 / q8_0 | — | — | not run: the KV penalty is already measured on this model (below) |
+
+Two rows have no A/B, and the reason is not laziness:
+
+**`gemma4`** runs at 131072 — the window its own metadata declares — with `--n-cpu-moe 0`, so both
+axes are at their limit: wider exceeds the declared context, lower cannot go below zero. There is no
+pair to measure.
+
+**`coder`** had exactly one candidate left: a wider window paid for with a quantised cache, the
+`dsv2` trade. It is already measured, on this model: §4 of the README's KV comparison *is*
+`qwen2.5-coder-7b` — f16 57.9 / 62.4 / 62.3 t/s against `q8_0` 44.7 / 49.6, a 25-35 % loss. Paying
+that for 16384 more tokens on a model whose window is already its trained maximum is a bad trade, and
+it does not need a new run to be refused.
 
 Note what the absolute numbers do: this card read 40.6 t/s for a `qwen36` configuration that measured
 35.3 the night before, with nothing changed. That is the whole reason for the A/B; the deltas are the

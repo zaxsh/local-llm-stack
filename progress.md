@@ -657,6 +657,13 @@ download and swung 24.4/32.7 then 33.0/27.4; the second hit a 19.2 t/s outlier; 
 loads over three rounds and read 30.3 against 30.3. A floor move too: 14 is now a CUDA OOM at 32768,
 so `gptoss` ships `--n-cpu-moe 15`.
 
+**Six of the eight models got an A/B arm pair; two could not have one, and the documents say why.**
+`gemma4` is at 131072 — the window its own metadata declares — with `n-cpu-moe` already 0, so both
+axes sit at their limit. `coder` had one candidate left, a q8_0 cache buying 49152, and that penalty
+is already measured *on that model* in README §4: 57.9 f16 against 44.7 t/s. Neither is an assumption
+dressed as a measurement; both are stated as "no candidate" or "already refuted", with the file that
+shows it.
+
 **The new model is `AmSach/DeepSeek-Coder-V2-Lite-Instruct-MAPLE-Sub5GB-GGUF`.** 4 830 185 248 bytes,
 hash `a8a562…c7480`, 2 500 s to download at 1.4 MB/s. Geometry: `deepseek2`, 27 blocks, 6 of 54 experts
 active per token, 2.87 bpw, 0.88 GB read per token.
