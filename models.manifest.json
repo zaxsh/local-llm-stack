@@ -1,7 +1,7 @@
 {
   "_comment": "Model catalogue for this stack. 'repo' + 'repoFile' is what llm-fetch.ps1 downloads; 'file' is the name it must have in models\\ for the registry, presets and launcher to find it. 'localSha256' is the sha256 of the exact file benchmarked on this machine (record only - uploaders can re-upload the same quant with different bytes). 'verified' means the local file is byte-identical to what this source serves.",
   "version": 2,
-  "updated": "2026-11-11",
+  "updated": "2026-11-14",
   "models": [
     {
       "key": "gemma4",
@@ -86,6 +86,18 @@
       "verified": true,
       "localSha256": "baf6dfd9eb22799143ae96c89ddb2971733e2f3029783685e18c873c576457de",
       "note": "Byte-identical to what the publisher serves: the repo ships a .sha256 beside every quant and the local 15 GB file hashes to it. Expert-pruned Qwen3.6-35B-A3B (256->184 experts, top-10 routing), 26.66B total, ~3B active. 44.4 t/s at max ctx 32768 with -n-cpu-moe 26 (24 is a real CUDA OOM); native tool calls; thinks before answering."
+    },
+    {
+      "key": "dsv2",
+      "file": "deepseek-coder-v2-lite-maple-sub5gb.gguf",
+      "repo": "AmSach/DeepSeek-Coder-V2-Lite-Instruct-MAPLE-Sub5GB-GGUF",
+      "repoFile": "DeepSeek-Coder-V2-Lite-MAPLE-Sub5GB.gguf",
+      "sizeBytes": 4830185248,
+      "quant": "MAPLE Sub5GB (~2.9 bpw)",
+      "params": "13.5B MoE (2.4B active), DeepSeek-V2-Lite coder",
+      "verified": true,
+      "localSha256": "a8a562383bae869564da64b973c98fee5dfeac48d427f1ad31dd1799be9c7480",
+      "note": "4.5 GB for a 13.5B MoE: MAPLE mixes per-tensor types to keep a code model under 5 GB. The repo's chat template is plain User:/Assistant: with no tool block, so this one has no native tool calls and no REA."
     }
   ]
 }

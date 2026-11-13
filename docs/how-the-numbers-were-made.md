@@ -790,6 +790,84 @@ load_s, n_ctx). Regenerate with the command above; never type the table by hand.
 
 ---
 
-*Numbers in this document were taken 2026-11-10 through 2026-11-13 on `MSI-Crosshair`, Windows 11 build 28000,
+# Part 12 — Every window, re-A/B'd; and a fast model that is wrong (2026-11-14)
+
+## The sweep
+
+Part 11 widened two windows because the tool catalog was eating them. This part asked the same
+question of all eight models at once, with the same harness and the same rule: a change ships only on
+an A/B median, and the claim is "the wider window costs nothing", never "the model got faster".
+
+| model | kept | offered | A (t/s) | B (t/s) | verdict |
+|---|---|---|---|---|---|
+| `qwen36` | 40960 / 31 | 49152 / 32 | 40.6 | 34.6 | refused, −14.8 % |
+| `coder36` | **57344 / 30** | 49152 / 29 | 38.2 | 37.7 | taken, −1.3 % for +8192 tokens |
+| `flint` | 49152 / 40 | 57344 / 40 | 34.0 | 29.3 | refused, −13.8 % |
+| `gptoss` | **32768 / 15** | 24576 / 14 | 30.3 | 30.3 | taken, 0.0 % over six loads |
+| `qwen3` | 16384 / f16 | 20480 / q8_0 | 55.5 | 52.5 | refused (same window) |
+
+Note what the absolute numbers do: this card read 40.6 t/s for a `qwen36` configuration that measured
+35.3 the night before, with nothing changed. That is the whole reason for the A/B; the deltas are the
+finding and the t/s column is scenery.
+
+`gptoss` took three attempts before it could be read. Run 1 shared the machine with a 4.5 GB Hugging
+Face download and gave 24.4/32.7 then 33.0/27.4 — inside the noise band, useless. Run 2 produced a
+19.2 t/s outlier in one arm. Run 3 ran three rounds and six loads: 30.2/30.3, 32.2/32.3, 30.3/29.2.
+Medians 30.3 against 30.3. That is what "free" looks like when it is real, and it is also why a
+single round is not evidence.
+
+`qwen3` was the one negative result worth recording properly: at an *equal* window `q8_0` measured
+55.5 against 52.5 (−5.4 %), so the earlier combined "+6.5 % at 20480/q8_0" was the larger window
+paying for a slower cache, and inside the noise. Shipped unchanged.
+
+## The model that arrives fast and wrong
+
+`AmSach/DeepSeek-Coder-V2-Lite-Instruct-MAPLE-Sub5GB-GGUF` — 4 830 185 248 bytes, `deepseek2`, 27
+blocks, 6 of 54 experts per token, 2.87 bpw. `llm-plan.ps1` reads 0.43 GB of non-expert weights and
+0.88 GB per token.
+
+The KV cache is what shapes the preset: 276 KB per token (27 layers × 8 KB), which is 4.5 GB at
+16 384. Measured ceiling:
+
+| window | KV | outcome |
+|--:|---|---|
+| 4096 | f16 | serves |
+| 8192 | f16 | serves, 58.0 t/s (A/B median) |
+| 10240 | f16 | loads, first completion fails |
+| 16384 | f16 + ncmoe 12 | serves, 46.0 t/s |
+| 18432 | q8_0 | serves, **65.1 t/s** |
+| 19456 | q8_0 | loads, connection closed mid-completion |
+| 20480 | q8_0 | CUDA OOM |
+
+`-ctk q8_0 -ctv q8_0` is therefore not a quality compromise here, it is the configuration: it is 12.2 %
+*faster* than 8192/f16 because attention reads half the cache, and it buys 2.25× the window. This is
+the opposite of the finding in §"f16 KV beats quantised KV" — that finding holds at an equal window
+and on models whose KV is small enough to keep both. When the cache does not fit, halving it wins.
+
+Then the capability suite, twice, on two different KV types:
+
+```
+dsv2   math 1/6   logic 0/5   code 1/4   instr 1/6   json 2/3   needle 0/3   tools 0/3   knowledge 1/6   macro 17.7
+```
+
+The other seven score 67.7-100.0 on the same suite. It is not the cache: the same items at f16/8192
+reproduce every failure — Saturn named as the largest planet (and described as "larger than only
+Jupiter"), plants absorbing oxygen and releasing carbon dioxide, the roses syllogism answered (B) when
+the answer is (C), and an instruction item that repeats "Reduced stress levels" eight times.
+
+What that means in practice: MAPLE keeps 54 of 64 experts and then quantises to 2.87 bpw, and the
+combination is not the "~93 % of the original" the card implies on these tasks. It is a 4.5 GB, 65 t/s
+13.5B coder with no CPU offload — a genuinely useful *shape* — attached to 17.7 % of the score.
+
+It ships anyway, labelled: the README row says "experiments only", the registry `Note` says the same,
+and `bench\eval-dsv2.json` keeps all 36 replies so nobody has to take this on trust.
+
+Data: `bench\window-ab-dsv2.csv`, `bench\window-ab-qwen36-wide.csv`, `bench\window-ab-coder36-wide.csv`,
+`bench\window-ab-flint-wide.csv`, `bench\window-ab-gptoss.csv`, `bench\window-ab-qwen3-kv.csv`,
+`bench\window-ab-qwen3-kv-only.csv`, `bench\probe-dsv2-16384.csv`, `bench\eval-dsv2.json`.
+
+---
+
+*Numbers in this document were taken 2026-11-10 through 2026-11-14 on `MSI-Crosshair`, Windows 11 build 28000,
 llama.cpp b12255 (CUDA 13.5), NVIDIA driver 621.01. Where a figure is arithmetic rather than
 measurement it says so; where a measurement was unstable it says that too.*

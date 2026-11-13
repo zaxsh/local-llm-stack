@@ -54,7 +54,10 @@ param(
     [int]$GenTokens = 384,
     [int]$Port = 8091,
     [int]$Threads = 16,
-    # The GPU this project targets: the model must be offloaded to it, so this is not optional.
+    # KV cache type per arm, so a window can be traded against precision: f16 is the fast default,
+    # q8_0 halves the cache and buys a window the card cannot otherwise hold.
+    [string]$AKv = 'f16',
+    [string]$BKv = 'f16',
     [string]$Out = (Join-Path (Split-Path $PSScriptRoot -Parent) 'bench\window-ab.csv')
 )
 
@@ -91,7 +94,7 @@ function Start-Arm([hashtable]$arm) {
     Remove-Item $log -ErrorAction SilentlyContinue
     $a = @('-m', $Model, '-c', "$($arm.Ctx)", '--host', '127.0.0.1', '--port', "$Port",
         '--jinja', '--metrics', '--no-warmup', '-t', "$Threads", '-tb', "$Threads",
-        '-ngl', '99', '-fa', 'on', '-ctk', 'f16', '-ctv', 'f16',
+        '-ngl', '99', '-fa', 'on', '-ctk', $arm.Kv, '-ctv', $arm.Kv,
         '--n-cpu-moe', "$($arm.CpuMoe)", '--alias', $Alias)
     $sw = [Diagnostics.Stopwatch]::StartNew()
     $p = Start-Process $exe -ArgumentList $a -PassThru -WindowStyle Hidden `
@@ -118,19 +121,19 @@ function Invoke-Gen {
     return [double]$r.timings.predicted_per_second
 }
 
-'round,arm,ctx,ncmoe,tps,load_s,n_ctx' | Set-Content $Out
+'round,arm,ctx,ncmoe,kv,tps,load_s,n_ctx' | Set-Content $Out
 $arms = @(
-    @{ Tag = 'A'; Ctx = $ACtx; CpuMoe = $ACpuMoe; Tps = @() },
-    @{ Tag = 'B'; Ctx = $BCtx; CpuMoe = $BCpuMoe; Tps = @() }
+    @{ Tag = 'A'; Ctx = $ACtx; CpuMoe = $ACpuMoe; Kv = $AKv; Tps = @() },
+    @{ Tag = 'B'; Ctx = $BCtx; CpuMoe = $BCpuMoe; Kv = $BKv; Tps = @() }
 )
 
 for ($round = 1; $round -le $Rounds; $round++) {
     foreach ($arm in $arms) {
-        Write-Host ("  round {0}  arm {1}  ctx {2}  ncmoe {3}  " -f $round, $arm.Tag, $arm.Ctx, $arm.CpuMoe) -NoNewline
+        Write-Host ("  round {0}  arm {1}  ctx {2}  ncmoe {3}  kv {4}  " -f $round, $arm.Tag, $arm.Ctx, $arm.CpuMoe, $arm.Kv) -NoNewline
         $arm = Start-Arm $arm
         if (-not $arm.Loaded) {
             Write-Host ("FAILED to load in {0}s" -f $arm.LoadS) -ForegroundColor Red
-            "$round,$($arm.Tag),$($arm.Ctx),$($arm.CpuMoe),0,$($arm.LoadS),0" | Add-Content $Out
+            "$round,$($arm.Tag),$($arm.Ctx),$($arm.CpuMoe),$($arm.Kv),0,$($arm.LoadS),0" | Add-Content $Out
             continue
         }
         $null = Invoke-Gen            # discard: brings the SM clock up, and its number belongs to the ramp
@@ -139,7 +142,7 @@ for ($round = 1; $round -le $Rounds; $round++) {
         $med = [math]::Round((Get-Median $vals), 1)
         $arm.Tps += $med
         Write-Host ("{0,5:N1} t/s   (load {1}s, n_ctx {2})" -f $med, $arm.LoadS, $arm.NCtx) -ForegroundColor Green
-        "$round,$($arm.Tag),$($arm.Ctx),$($arm.CpuMoe),$med,$($arm.LoadS),$($arm.NCtx)" | Add-Content $Out
+        "$round,$($arm.Tag),$($arm.Ctx),$($arm.CpuMoe),$($arm.Kv),$med,$($arm.LoadS),$($arm.NCtx)" | Add-Content $Out
     }
 }
 
@@ -153,6 +156,6 @@ if (-not $a -or -not $b) {
 }
 $delta = [math]::Round(100.0 * ($b - $a) / $a, 1)
 $colour = if ($delta -le -5) { 'DarkYellow' } else { 'Green' }
-Write-Host ("  A ctx {0} ncmoe {1}: {2:N1} t/s" -f $ACtx, $ACpuMoe, $a)
-Write-Host ("  B ctx {0} ncmoe {1}: {2:N1} t/s  ({3:+0.0;-0.0} %)" -f $BCtx, $BCpuMoe, $b, $delta) -ForegroundColor $colour
+Write-Host ("  A ctx {0} ncmoe {1} kv {2}: {3:N1} t/s" -f $ACtx, $ACpuMoe, $AKv, $a)
+Write-Host ("  B ctx {0} ncmoe {1} kv {2}: {3:N1} t/s  ({4:+0.0;-0.0} %)" -f $BCtx, $BCpuMoe, $BKv, $b, $delta) -ForegroundColor $colour
 Write-Host ("  rows written to {0}" -f $Out) -ForegroundColor DarkGray

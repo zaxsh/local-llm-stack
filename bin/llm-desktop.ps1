@@ -110,11 +110,12 @@ Write-Host "  fetch: llm-fetch.ps1 + models.manifest.json" -ForegroundColor Dark
 # measured -n-cpu-moe / thread values.
 $up = Get-Content (Join-Path $bin 'llm-up.ps1') -Raw
 $entries = [ordered]@{}
-foreach ($m in [regex]::Matches($up, "(?m)^\s*(\w+)\s*=\s*@\{\s*File\s*=\s*'([^']+)';\s*Port\s*=\s*(\d+);\s*Alias\s*=\s*'([^']+)';\s*Ctx\s*=\s*(\d+);\s*CpuMoe\s*=\s*(\d+);\s*Threads\s*=\s*(\d+)(?:;\s*Note\s*=\s*'[^']*')?(?:;\s*Mcp\s*=\s*'([^']*)')?")) {
+foreach ($m in [regex]::Matches($up, "(?m)^\s*(\w+)\s*=\s*@\{\s*File\s*=\s*'([^']+)';\s*Port\s*=\s*(\d+);\s*Alias\s*=\s*'([^']+)';\s*Ctx\s*=\s*(\d+);\s*CpuMoe\s*=\s*(\d+);\s*Threads\s*=\s*(\d+)(?:;\s*Note\s*=\s*'[^']*')?(?:;\s*Mcp\s*=\s*'([^']*)')?(?:;\s*Kv\s*=\s*'([^']*)')?")) {
     $entries[$m.Groups[1].Value] = @{
         File = $m.Groups[2].Value; Port = $m.Groups[3].Value; Alias = $m.Groups[4].Value
         Ctx = $m.Groups[5].Value; CpuMoe = $m.Groups[6].Value; Threads = $m.Groups[7].Value
         Mcp = $(if ($m.Groups[8].Success) { $m.Groups[8].Value } else { '' })
+        Kv = $(if ($m.Groups[9].Success) { $m.Groups[9].Value } else { '' })
     }
 }
 if ($entries.Count -eq 0) { throw "could not read the model registry from llm-up.ps1" }
@@ -205,7 +206,7 @@ foreach ($k in $entries.Keys) {
         "  -c $($e.Ctx)",
         "  --jinja --metrics --no-warmup",
         "  -t $($e.Threads) -tb $($e.Threads)",
-        "  -ngl 99 -fa on -ctk f16 -ctv f16"
+        ("  -ngl 99 -fa on -ctk {0} -ctv {0}" -f $(if ($e.Kv) { $e.Kv } else { 'f16' }))
     )
     if ([int]$e.CpuMoe -gt 0) { $args += "  --n-cpu-moe $($e.CpuMoe)" }
     # llama-server spawns REA from this file; the tools show up as rea_* in the Web UI.

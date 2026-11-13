@@ -637,6 +637,71 @@ picker (~2 500 tokens) and let the window cover the rest. The catalog is per cha
 
 ---
 
+## Phase 10 (2026-11-14 00:30 → 03:00) — every window re-A/B'd, and a 4.5 GB coder that is fast and wrong
+
+The request was "reoptimize every model" plus one new arrival. Both turned into measurement work.
+
+**The re-sweep moved two models and refused three.** Every preset was offered a wider window and the
+pair measured A/B/A/B by `bin\llm-window-ab.ps1` (warm-up discarded, medians, `/props` read back):
+
+| model | kept | offered | result |
+|---|---|---|---|
+| `qwen36` | 40960 / ncmoe 31 | 49152 / 32 | **refused**, −14.8 % |
+| `coder36` | **57344 / 30** | was 49152 / 29 | **taken**, −1.3 % for +8192 tokens |
+| `flint` | 49152 / 40 | 57344 / 40 | **refused**, −13.8 % |
+| `gptoss` | **32768 / 15** | was 24576 / 14 | **taken**, 0.0 % over six loads |
+| `qwen3` | 16384 / f16 | 20480 / q8_0 | **refused**, +6.5 % is inside the noise and q8_0 alone costs 5.4 % |
+
+`gptoss` needed three attempts to answer honestly: the first run shared the machine with a 4.5 GB
+download and swung 24.4/32.7 then 33.0/27.4; the second hit a 19.2 t/s outlier; the third ran six
+loads over three rounds and read 30.3 against 30.3. A floor move too: 14 is now a CUDA OOM at 32768,
+so `gptoss` ships `--n-cpu-moe 15`.
+
+**The new model is `AmSach/DeepSeek-Coder-V2-Lite-Instruct-MAPLE-Sub5GB-GGUF`.** 4 830 185 248 bytes,
+hash `a8a562…c7480`, 2 500 s to download at 1.4 MB/s. Geometry: `deepseek2`, 27 blocks, 6 of 54 experts
+active per token, 2.87 bpw, 0.88 GB read per token.
+
+Its problem is KV: 276 KB per token. f16 serves 8192 and dies at 10240; `-ctk q8_0 -ctv q8_0` serves
+18432 (19456 loads and then closes the connection mid-completion). The A/B is unambiguous — 58.0 t/s
+at 8192/f16 against **65.1 t/s at 18432/q8_0** — so this is the one preset with a `Kv` field, and the
+registry/launcher/preset generator learned to carry it.
+
+Then the capability suite happened:
+
+```
+ dsv2     math 1/6  logic 0/5  code 1/4  instr 1/6  json 2/3  needle 0/3  tools 0/3  knowledge 1/6   macro 17.7
+```
+
+Everything else scores 67.7-100. It is not the quantised cache: the same questions at f16/8192 give the
+same wrong answers — Saturn as the largest planet, plants absorbing oxygen, the roses syllogism
+answered (B), and an instruction item that loops "Reduced stress levels" eight times. The MAPLE
+pruning plus 2.87 bpw did that, and no serving flag undoes it.
+
+Decision: ship it, labelled. It is 65 t/s of 13.5B coder in 4.5 GB with no CPU offload at all, which
+is genuinely the cheapest way to run anything that large on this card — and it is behind `coder36` on
+every scored axis. The README says so in the table row itself, not in a footnote.
+
+**Everything re-verified before the tag**, on the bundle rather than the repo copy:
+
+```
+preset  model                  port load_s gen_tps tool_call
+coder   qwen2.5-coder-7b       8081 8.4    56.4    no
+coder36 qwen3.6-27b-a3b-coder  8085 14.8   36.4    yes
+dsv2    deepseek-coder-v2-lite 8086 6.6    69.1    no
+flint   flint-nvfp4-40b        8080 27.6   30.0    yes
+gemma4  gemma-4-e4b            8083 9.2    75.0    yes
+gptoss  gpt-oss-20b            8082 19.0   33.8    no
+qwen3   qwen3-8b               8081 10.2   57.7    yes
+qwen36  qwen3.6-35b-a3b        8084 27.6   29.7    yes
+```
+
+`llm-selftest.ps1` PASS 10 (8 registry entries, 8 catalogued files, 8 matching presets, the 39-tool
+catalog still fits all four tool presets, `--list` answers for 8 models).
+
+**Release v1.5.1** carries all of the above, with the same three assets as every release before it.
+
+---
+
 ## How to verify any of this
 
 ```powershell

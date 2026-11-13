@@ -55,8 +55,13 @@ Engine: **llama.cpp b12255**, CUDA 12.4 build plus the CUDA 13.5 runtime pack, f
 
 ```
 key = @{ File = '<name in models\>'; Port = 8083; Alias = '<openai model id>'; Ctx = 131072;
-         CpuMoe = 0; Threads = 20; Note = '<what it is and how fast, one line>' }
+         CpuMoe = 0; Threads = 20; Note = '<what it is and how fast, one line>'; Kv = 'q8_0' }
 ```
+
+`Kv` is optional and defaults to `f16`. It exists for one model: `dsv2` stores 276 KB of KV per
+token, so at f16 its window dies at 10240 while `-ctk q8_0 -ctv q8_0` holds 18432 — and runs *faster*
+there (65.1 vs 58.0 t/s), because attention then reads half the cache. Do not set it by default: at
+an equal window q8_0 measured 5.4 % slower on `qwen3`.
 
 Every other artefact is generated *from* it, and the scripts that need it **regex it out of the file
 text** rather than importing it (a deliberate choice: `llm-up.ps1` also has side effects, so dotting
@@ -163,14 +168,20 @@ Two more rules that the capability run made obvious, and they apply to every mea
 | `flint` | FLINT 40B MoE, nvfp4 | 21.29 GB | 49152 | 29.8 | 8080 | 40 | yes |
 | `qwen3` | Qwen3-8B Q4_K_M | 4.68 GB | 16384 (20480 OOM) | 59.0 | 8081 | 0 | yes |
 | `coder` | Qwen2.5-Coder-7B Q4_K_M | 4.36 GB | 32768 | 50.3 | 8081 | 0 | **no** |
-| `gptoss` | gpt-oss-20b MXFP4 | 11.28 GB | 24576 (32768 OOM) | 30.8 | 8082 | 14 | **no** |
+| `dsv2` | DeepSeek-Coder-V2-Lite MAPLE Sub5GB | 4.50 GB | 18432 (q8_0 KV) | 65.1 | 8086 | 0 | **no** |
+| `gptoss` | gpt-oss-20b MXFP4 | 11.28 GB | 32768 (24576 before) | 30.8 | 8082 | 15 | **no** |
 | `qwen36` | Qwen3.6-35B-A3B-MTP UD-Q4_K_S | 19.92 GB | 40960 | 35.3 | 8084 | 31 | yes |
-| `coder36` | Qwen3.6-27B-A3B-Coder Q4_K_M | 14.95 GB | 49152 | 32.6 | 8085 | 29 | yes |
+| `coder36` | Qwen3.6-27B-A3B-Coder Q4_K_M | 14.95 GB | 57344 | 32.6 | 8085 | 30 | yes |
 
 Both Qwen3.6 windows were widened on 2026-11-13 (20480 → 40960, 32768 → 49152) once the tool catalog
 turned out to eat 61 % and 38 % of them; the speed column is the A/B median from
 `bin\llm-window-ab.ps1`, not a single-shot sweep. At 49152 the `coder36` floor moved: 27 is a CUDA
-OOM, 28 loads, 29 is what the registry ships.
+OOM, 28 loads, 29 was shipped that night.
+
+Then on 2026-11-14 every model was re-swept and re-A/B'd, which moved three things: `coder36` to
+57344 (`--n-cpu-moe 30`, 8192 more tokens for 1.3 % — inside the noise), `gptoss` to 32768
+(`--n-cpu-moe 15`, 0.0 % over six loads), and `dsv2` arrived. `qwen36` and `flint` were offered larger
+windows and refused them: 49152/32 cost `qwen36` 14.8 % and 57344 cost `flint` 13.8 %.
 
 `coder36` was finished on 2026-11-12; §7 is the record of how, including the two tools it exposed.
 It is the fastest model here that still handles 32k of context, and the only one whose file is
@@ -239,8 +250,8 @@ Both are instances of the same lesson: **one source of truth, or the copies drif
 
 ## 8. The state of the repository right now, and how to re-verify it
 
-Seven models, all measured, all in the registry, the catalogue, `presets\`, the launcher and the
-README. `main` is released as **v1.2.0**; the depth-stability pass of 2026-11-12 is on top of it.
+Eight models, all measured, all in the registry, the catalogue, `presets\`, the launcher and the
+README. `main` is released as **v1.5.1**; the 2026-11-14 window pass and `dsv2` are in it.
 
 ```powershell
 cd C:\Users\fih\llm
@@ -432,6 +443,19 @@ Each of these cost real time. Do not rediscover them.
     read the geometry from the header (`llm-plan.ps1` now reports `KvBytesPerToken` and where it came
     from), and let measurement outrank arithmetic — if the registry already serves that file at that
     context, the estimate is not allowed to say it will not fit.
+23. **A model can load, answer, and still be wrong.** `dsv2` serves 65.1 t/s at 18432 and scores
+    **17.7 %** on the capability suite; every load probe passes, every `/health` says ok, and the only
+    thing that catches it is `bin\llm-eval.ps1`. Speed measurements do not test a quantised model's
+    quality, and a Hugging Face card claiming "~93 % retained" is a claim about *their* benchmark.
+    Run the suite before a new model goes in the README table, and put the score in the table row.
+24. **`-ctk q8_0` is not always the slow choice.** The rule "f16 is 25-35 % faster" holds at an equal
+    window on models whose cache fits (`qwen3`: 55.5 vs 52.5). When the cache is what stops the window
+    (`dsv2`: 276 KB/token), halving it serves a 2.25x larger window *and* runs 12.2 % faster, because
+    attention reads half the bytes. Measure both arms; the direction is not a constant.
+25. **A registry field the generators do not know about is silently dropped.** Adding `Kv` took four
+    edits: `llm-up.ps1` (serve), `llm-desktop.ps1` (preset writer *and* the parsing regex),
+    `llm-direct.ps1` (the compiled launcher list) and the regex group order. The preset is the proof:
+    if `presets\dsv2.cmd` does not contain `-ctk q8_0`, the field never arrived.
 
 ## 11. House rules (how this repository is written)
 

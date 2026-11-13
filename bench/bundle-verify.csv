@@ -1,8 +1,9 @@
 preset,model,port,load_s,health,gen_tps,gen_tokens,finish,tool_call,stopped,vram_after
-coder,qwen2.5-coder-7b,8081,9.4,ok,61.2,300,length,"no",yes,1044
-coder36,qwen3.6-27b-a3b-coder,8085,16.3,ok,34.1,300,length,"get_weather({"city":"Istanbul"})",yes,932
-flint,flint-nvfp4-40b,8080,27.7,ok,25.1,300,length,"get_weather({"city":"Istanbul"})",yes,827
-gemma4,gemma-4-e4b,8083,10.3,ok,69.9,300,length,"get_weather({"city":"Istanbul"})",yes,886
-gptoss,gpt-oss-20b,8082,22.1,ok,20,300,length,"no",yes,404
-qwen3,qwen3-8b,8081,10.8,ok,44.8,300,length,"get_weather({"city": "Istanbul"})",yes,529
-qwen36,qwen3.6-35b-a3b,8084,30.9,ok,27.9,300,length,"get_weather({"city":"Istanbul"})",yes,486
+coder,qwen2.5-coder-7b,8081,8.4,ok,56.4,300,length,"no",yes,339
+coder36,qwen3.6-27b-a3b-coder,8085,14.8,ok,36.4,300,length,"get_weather({"city":"Istanbul"})",yes,339
+dsv2,deepseek-coder-v2-lite,8086,6.6,ok,69.1,300,length,"no",yes,334
+flint,flint-nvfp4-40b,8080,27.6,ok,30,300,length,"get_weather({"city":"Istanbul"})",yes,334
+gemma4,gemma-4-e4b,8083,9.2,ok,75,300,length,"get_weather({"city":"Istanbul"})",yes,334
+gptoss,gpt-oss-20b,8082,19,ok,33.8,300,length,"no",yes,334
+qwen3,qwen3-8b,8081,10.2,ok,57.7,300,length,"get_weather({"city": "Istanbul"})",yes,334
+qwen36,qwen3.6-35b-a3b,8084,27.6,ok,29.7,300,length,"get_weather({"city":"Istanbul"})",yes,304

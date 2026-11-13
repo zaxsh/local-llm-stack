@@ -22,7 +22,7 @@
 param(
     # [string[]] on purpose: pwsh -File x.ps1 -Models a,b hands over one string, while &x.ps1 -Models a,b hands over an array. Both must work, so the list is normalised below.
     [string]$Suite = (Join-Path (Split-Path $PSScriptRoot -Parent) 'bench\capability-suite-v1.json'),
-    [string[]]$Models = @('gemma4', 'qwen3', 'coder', 'flint', 'gptoss', 'coder36', 'qwen36'),
+    [string[]]$Models = @('gemma4', 'qwen3', 'coder', 'flint', 'gptoss', 'coder36', 'qwen36', 'dsv2'),
     [string[]]$Only = @(),
     [switch]$SkipNeedle,
     [switch]$KeepRunning,

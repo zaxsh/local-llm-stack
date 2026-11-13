@@ -75,7 +75,8 @@ foreach ($k in $entries.Keys) {
     $sub = if ($f) { $f.Sub } elseif ($e.Note) { $e.Note } else { '' }
     # the window says which models arrive with tools; the args below are what actually delivers them
     if ($e.Mcp) { $sub = if ($sub) { "$sub, $($e.Mcp.ToUpper()) tools" } else { "$($e.Mcp.ToUpper()) tools" } }
-    $args = "-m `"models\$($e.File)`" --alias $($e.Alias) --host 127.0.0.1 --port $($e.Port) -c $($e.Ctx) --jinja --metrics --no-warmup -t $($e.Threads) -tb $($e.Threads) -ngl 99 -fa on -ctk f16 -ctv f16"
+    $kv = if ($e.Kv) { $e.Kv } else { 'f16' }
+    $args = "-m `"models\$($e.File)`" --alias $($e.Alias) --host 127.0.0.1 --port $($e.Port) -c $($e.Ctx) --jinja --metrics --no-warmup -t $($e.Threads) -tb $($e.Threads) -ngl 99 -fa on -ctk $kv -ctv $kv"
     # no quote-doubling here: CsLiteral() emits a verbatim @"..." string and doubles them itself.
     # Doing it in both places sent -m ""models\x.gguf"" to the engine.
     if ($e.CpuMoe -gt 0) { $args += " --n-cpu-moe $($e.CpuMoe)" }

@@ -1,6 +1,6 @@
 # 40B models on an 8 GB laptop GPU
 
-![The launcher: seven models, one at a time, with the download button and a live log pane](docs/img/launcher.png)
+![The launcher: eight models, one at a time, with the download button and a live log pane](docs/img/launcher.png)
 
 A local-inference stack for one exact machine - Core Ultra 7 255HX, 32 GB DDR5-5600, RTX 5060 Laptop
 with 8 GB - where every flag was measured instead of guessed, and the guesses that turned out wrong
@@ -15,11 +15,12 @@ with a 131072-token context**, both on the same 8 GB card, one at a time.
 |---|--:|--:|--:|---|---|
 | **Gemma 4 E4B** QAT UD-Q4_K_XL | 4.2 GB | **74.1 t/s** | 131072 | yes | the default: fast, huge context, drives agents |
 | **Qwen3.6 35B-A3B** MoE UD-Q4_K_S | 21.7 GB | 35.3 t/s¹ | 40960 | yes | strongest answers that still fit |
-| **Qwen3.6 27B-A3B Coder** MoE Q4_K_M | 16.1 GB | 32.6 t/s¹ | 49152 | yes | code, with the best speed-per-capability here |
+| **Qwen3.6 27B-A3B Coder** MoE Q4_K_M | 16.1 GB | 32.6 t/s¹ | 57344 | yes | code, with the best speed-per-capability here |
 | **flint 40B** NVFP4 MoE | 22.9 GB | 29.8 t/s | 49152 | yes | longest context on a big model |
-| **gpt-oss 20B** MXFP4 | 13.8 GB | 30.8 t/s | 24576 | no | chat only |
+| **gpt-oss 20B** MXFP4 | 13.8 GB | 30.8 t/s² | 32768 | no | chat only |
 | **Qwen3 8B** Q4_K_M | 5.2 GB | 59.0 t/s | 16384 | yes | small and quick, thinks first |
 | **Qwen2.5 Coder 7B** Q4_K_M | 4.7 GB | 50.3 t/s | 32768 | no | code, not agents |
+| **DeepSeek-Coder-V2-Lite** MAPLE Sub5GB | 4.5 GB | 65.1 t/s² | 18432 | no | 13.5B MoE in 4.5 GB — fastest coder here, but the quant is damaged: 17.7 % on the suite, experiments only |
 
 Every context number is the **largest one that completed a real 200-token request** on this machine.
 `/health` answering is not proof: one model reports healthy at 24576 and then fails its first
@@ -31,6 +32,10 @@ completion. The method, including what had to be thrown away, is in
 arms. On that afternoon the card ran ~30 % below its best-day clocks — the *old* windows measured
 29.1 and 29.2 t/s on the same harness — so treat these two figures as a same-day comparison
 (+21 % and +12 % against the narrower window), not as a regression against the rows above.
+
+² Re-measured on the night of 2026-11-14 in the same A/B session as the two rows above
+(`bench\window-ab-*.csv`). Do not compare columns across footnotes: the absolute numbers move ±30 %
+with the card's clocks and the only valid comparison is the one printed in the linked CSV.
 
 ## Run it
 
@@ -78,7 +83,7 @@ Prefer to drive it by hand?
 | `bin\` | 28 scripts: registry, fetcher, bundle builder, launcher builder, benchmarks, the capability battery, self-test, agent connectors |
 | `mcp\` | `rea-mcp.json` — the MCP server definition `llama-server` reads from `--mcp-servers-config`, written by `bin\llm-mcp.ps1` |
 | `models.manifest.json` | the catalogue: repo, file, exact size, sha256 per model |
-| `presets\` | the tuned flags for all seven models, readable without running anything |
+| `presets\` | the tuned flags for all eight models, readable without running anything |
 | `launchers\` | the Desktop shortcuts |
 | `docs\` | the results, the method, the project state, the client wiring guide |
 | `bench\` | the CSVs the numbers came from, and `bench\capability-suite-v1.json` — the graded task battery |
@@ -388,6 +393,11 @@ Quantising the KV cache costs **25–35 % of generation speed** on GPU, because 
 dequantises the whole cache on every token. `llm-server.ps1` therefore defaults to `f16` now;
 drop to `q8_0`/`q4_0` only when f16 does not fit (the fit warning says so).
 
+Two later measurements sharpen that. On `qwen3` at an equal 16384 window the penalty is smaller than
+the 25–35 % above — f16 55.5 against q8_0 52.5 t/s (−5.4 %, `bench\window-ab-qwen3-kv-only.csv`) — so
+the number depends on the model and the build. And when the cache genuinely does not fit, halving it
+is a *win*, because speed here is bytes read per token: `dsv2` runs 58.0 t/s at 8192/f16 and 65.1 at 18432/q8_0 (§14). Keep `f16` when it fits; measure instead of assuming when it does not.
+
 ---
 
 ## 5. "Mac-level" — what that actually means here
@@ -614,6 +624,7 @@ Measured with one tool-shaped prompt ("what is the weather in Istanbul, use get_
 | `flint-nvfp4-40b` | ✅ | correct call, 1.6 s to first token |
 | `qwen2.5-coder-7b` | ❌ | writes the call as a `json` code block; unusable for tool loops |
 | `gpt-oss-20b` | ❌ | emits raw Harmony markup (`<|channel|>analysis to=tool.get_weather...`) as text; the intent is right, the plumbing is not |
+| `deepseek-coder-v2-lite` | ❌ | the chat template has no tool block at all — there is nothing to put a call in |
 
 One trap worth knowing before you blame the client: **Qwen3 and Gemma 4 are reasoning models.**
 They stream their chain of thought into a separate `reasoning_content` field and only then fill
@@ -888,21 +899,24 @@ card, found by trial load — not by arithmetic:
 | `gemma4` | 131072 | 131072 | 74.1 t/s | −4 % (was 32k) |
 | `flint` | 49152 | 262144 | 29.8 t/s | none |
 | `coder` | 32768 | 32768 | 50.3 t/s | −4 % |
-| `coder36` | 49152 | 262144 | 32.6 t/s | **+12 %** against 32768 (A/B, 2026-11-13); n-cpu-moe 29, 27 is a CUDA OOM |
-| `gptoss` | 24576 | 131072 | 30.8 t/s | −10 % |
+| `dsv2` | 18432 | 163840 | 65.1 t/s | q8_0 KV: f16 dies at 10240, so the window needs the quantised cache |
+| `coder36` | 57344 | 262144 | 32.6 t/s | **+12 %** against 32768 (A/B, 2026-11-13); n-cpu-moe 30, 27 is a CUDA OOM |
+| `gptoss` | 32768 | 131072 | 30.8 t/s | 0.0 % against 24576 over 6 loads (A/B, 2026-11-14); n-cpu-moe 15, 14 is a CUDA OOM |
 | `qwen36` | 40960 | 262144 | 35.3 t/s | **+21 %** against 20480 (A/B, 2026-11-13); n-cpu-moe 31, 32 crashed once |
-| `qwen3` | 16384 | 40960 | 59.0 t/s | — (20480 will not load) |
+| `qwen3` | 16384 | 40960 | 59.0 t/s | — (20480 needs a q8_0 cache: it loads and then runs 5 % slower) |
 
-The last two rows exist because of §11: a 39-tool catalog costs 12 402 tokens, which was 61 % of
-`qwen36`'s 20 480 window and 38 % of `coder36`'s 32 768. Doubling the windows takes that to 30 % and
-25 % and costs nothing measurable — `bin\llm-window-ab.ps1` alternates the two configurations
-(`-ACtx/-ACpuMoe` vs `-BCtx/-BCpuMoe`), discards a warm-up generation, and reports medians, because
-single-shot sweeps on this laptop disagree with themselves by 30 %.
+`bin\llm-window-ab.ps1` alternates A/B/A/B, discards a warm-up generation per arm, waits for the card
+to drop below 1.5 GB before each load, and reads `n_ctx` back from `/props`. It exists because
+single-shot sweeps on this laptop disagree with themselves by 30 %. Every window in this table was
+confirmed by it: on 2026-11-14 a full pass measured qwen36 40.6 at 40960 and 34.6 at 49152 (keep),
+coder36 38.2 at 49152 and 37.7 at 57344 (take the wider window), flint 34.0 at 49152 and 29.3 at
+57344 (keep), gptoss 30.3 at both.
 
 The table is a best-day record, so it mixes dates. `bin\llm-verify-bundle.ps1` is the one thing that
-sees all seven under identical conditions — cold start, 300 tokens, ramp included — and on
-2026-11-14 00:25 it read coder 61.2, coder36 34.1, flint 25.1, gemma4 69.9, gptoss 20.0, qwen3 44.8,
-qwen36 27.9 t/s. Every one is below its row above; that is the card on that night, not the models.
+sees all eight under identical conditions — cold start, 300 tokens, ramp included — and at 02:35 on
+2026-11-14 it read coder 56.4, coder36 36.4, dsv2 69.1, flint 30.0, gemma4 75.0, gptoss 33.8,
+qwen3 57.7, qwen36 29.7 t/s, every preset loading and releasing the GPU. Most sit below the rows
+above; that is the card on that night, not the models.
 
 To move a value: edit `Ctx` for that row, then
 ```powershell
@@ -983,6 +997,47 @@ is why the probe sends a real request.
 With the background apps closed there is 6.4 GB free instead of ~4, and the same models can go
 higher. Measure again after closing them if you want the true ceiling.
 
+### The 4.5 GB coder: fast, tiny, and not what its card claims
+
+`dsv2` is [AmSach's MAPLE Sub5GB](https://huggingface.co/AmSach/DeepSeek-Coder-V2-Lite-Instruct-MAPLE-Sub5GB-GGUF)
+build of DeepSeek-Coder-V2-Lite-Instruct: 13.5B parameters of which 2.4B fire per token, pruned from
+64 to 54 experts per layer (MAPLE) and quantised to 2.87 bits per weight. 4.50 GB on disk, and the
+plan says 0.88 GB read per token — a dense model of the same size would read 5.1× more.
+
+Two numbers decide how it is served here.
+
+**KV is the whole problem.** This architecture stores 276 KB of cache per token, so the model plus an
+f16 window runs out of 8 GB almost immediately:
+
+| window | KV type | result |
+|--:|---|---|
+| 8192 | f16 | serves, 58.0 t/s (A/B median) |
+| 10240 | f16 | loads, then dies on the first completion |
+| 18432 | q8_0 | serves, **65.1 t/s** (A/B median, +12.2 %) |
+| 19456 | q8_0 | reports healthy, then closes the connection mid-completion |
+
+That is the one place where a quantised KV cache is the right answer on this machine: not because it
+is faster per token — `qwen3` measures 5.4 % *slower* with `q8_0` at the same window — but because
+attention reads half the cache and that buys 10240 tokens of window. `bench\window-ab-dsv2.csv`.
+
+**The model itself is damaged.** The same 36-item capability suite that scores everything else
+68-100 % scores it **17.7 %**:
+
+| math | logic | code | instr | json | needle | tools | knowledge |
+|--:|--:|--:|--:|--:|--:|--:|--:|
+| 1/6 | 0/5 | 1/4 | 1/6 | 2/3 | 0/3 | 0/3 | 1/6 |
+
+It is not the KV cache. The failures are reproducible with an f16 cache at 8192, and they are not
+subtle: it calls Saturn the largest planet (then says it is "larger than only Jupiter"), says plants
+absorb oxygen and release carbon dioxide, answers the roses syllogism with (B) instead of (C), and
+degrades into loops (`Reduced stress levels` ×8 in one instruction item). `bench\eval-dsv2.json` keeps
+every reply.
+
+So it ships, because it is the cheapest way to run a 13.5B coder on this card — 65 t/s at 18432 in
+4.5 GB, with no `--n-cpu-moe` at all — and it is labelled everywhere as an experiment, not an agent
+backend. If you want code you can trust, `coder36` (37.7 t/s, 57344 window, native tools) is the
+answer; `dsv2` is 1.7× its speed and roughly a third of its score.
+
 
 
 
@@ -990,7 +1045,7 @@ higher. Measure again after closing them if you want the true ceiling.
 
 ## 15. Getting the models back
 
-The GGUFs are 74 GB and none of them belong in git. `models.manifest.json` is the catalogue and
+The GGUFs are 79 GB and none of them belong in git. `models.manifest.json` is the catalogue and
 `bin\llm-fetch.ps1` is the fetcher; the launcher's **Download** button is a thin wrapper around it.
 
 ### The catalogue, and why some entries are marked `verified: false`
@@ -1089,12 +1144,12 @@ every answer with a program: exact values, regex predicates, JSON schemas, and f
 that the graders still accept their own gold answers.
 
 ```powershell
-.\bin\llm-eval.ps1                      # all seven models
+.\bin\llm-eval.ps1                      # all eight models
 .\bin\llm-eval.ps1 -Models coder36      # one model
 .\bin\llm-eval.ps1 -Report              # re-aggregate what is in bench\, run nothing
 ```
 
-Measured here on 2026-11-12, all seven models, 36 items each:
+Measured here on 2026-11-12 (and `dsv2` on 2026-11-14), all eight models, 36 items each:
 
 | model | macro | the short version |
 |---|--:|---|
@@ -1105,8 +1160,9 @@ Measured here on 2026-11-12, all seven models, 36 items each:
 | coder36 | 85.4 | 5 items hit the token ceiling, including two code items with an *empty* reply |
 | qwen36 | 78.1 | 8 items hit the ceiling; 2/6 instruction following at these budgets |
 | gpt-oss | 67.7 | 0/3 tools and 1/6 instructions — its analysis channel leaks into the content field on this build |
+| dsv2 | 17.7 | loads, runs at 65 t/s, and gets Saturn and photosynthesis wrong — see §14 before using it |
 
-Rank correlation between speed and capability across these seven: **0.2**. The fastest model is not the
+Rank correlation between speed and capability across these eight: **0.2**. The fastest model is not the
 smartest, and the slowest is not either. The full results, the method, and what the battery cannot tell
 you are in [docs/capability-evaluation.md](docs/capability-evaluation.md). Read that before quoting a
 number: six items per category means wide intervals, and a model that thinks for long enough hits its
