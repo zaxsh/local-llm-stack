@@ -14,8 +14,8 @@ with a 131072-token context**, both on the same 8 GB card, one at a time.
 | model | size | speed | context | tool calls | what it is for |
 |---|--:|--:|--:|---|---|
 | **Gemma 4 E4B** QAT UD-Q4_K_XL | 4.2 GB | **74.1 t/s** | 131072 | yes | the default: fast, huge context, drives agents |
-| **Qwen3.6 35B-A3B** MoE UD-Q4_K_S | 21.7 GB | 34.0 t/s | 20480 | yes | strongest answers that still fit |
-| **Qwen3.6 27B-A3B Coder** MoE Q4_K_M | 16.1 GB | **44.4 t/s** | 32768 | yes | code, with the best speed-per-capability here |
+| **Qwen3.6 35B-A3B** MoE UD-Q4_K_S | 21.7 GB | 35.3 t/s¹ | 40960 | yes | strongest answers that still fit |
+| **Qwen3.6 27B-A3B Coder** MoE Q4_K_M | 16.1 GB | 32.6 t/s¹ | 49152 | yes | code, with the best speed-per-capability here |
 | **flint 40B** NVFP4 MoE | 22.9 GB | 29.8 t/s | 49152 | yes | longest context on a big model |
 | **gpt-oss 20B** MXFP4 | 13.8 GB | 30.8 t/s | 24576 | no | chat only |
 | **Qwen3 8B** Q4_K_M | 5.2 GB | 59.0 t/s | 16384 | yes | small and quick, thinks first |
@@ -25,6 +25,12 @@ Every context number is the **largest one that completed a real 200-token reques
 `/health` answering is not proof: one model reports healthy at 24576 and then fails its first
 completion. The method, including what had to be thrown away, is in
 [docs/how-the-numbers-were-made.md](docs/how-the-numbers-were-made.md).
+
+¹ The two Qwen3.6 windows were widened on 2026-11-13 and their speeds re-measured with
+`bin\llm-window-ab.ps1`, which alternates old and new configuration so thermal drift hits both
+arms. On that afternoon the card ran ~30 % below its best-day clocks — the *old* windows measured
+29.1 and 29.2 t/s on the same harness — so treat these two figures as a same-day comparison
+(+21 % and +12 % against the narrower window), not as a regression against the rows above.
 
 ## Run it
 
@@ -668,6 +674,31 @@ result against the windows first:
 tokens, which leaves nothing for the tool result the model would then have to read. `coder` and
 `gptoss` never had them — neither emits a native `tool_calls`.
 
+### What one tool costs, and how to spend less
+
+The schemas are charged per request, so the window is not leaking — it is being spent. The rate,
+measured on this machine and the number to budget with:
+
+| | tokens per tool | 39-tool default |
+|---|--:|--:|
+| Qwen tokenizer | **318** | 12 402 |
+| Gemma tokenizer | 221 | 8 604 |
+
+Three consequences worth knowing before blaming the model for a short memory:
+
+1. **The picker is per chat.** Only the tools ticked in that chat are sent, and the cost is linear:
+   the eight that do the actual work — `open_binary`, `binary_session`, `analyze_function`,
+   `decompile_all`, `batch_decompile`, `binary_overview`, `get_call_graph`, `find_xrefs_to_name` —
+   are ~2 500 tokens, a fifth of the default. Select what the task needs, not the whole family.
+2. **Most of REA's catalog bytes never reach the model.** Its `outputSchema`s are 91 % of the 637 KB
+   the 39 tools weigh; `llama-server` sends name, description and input schema only. Trimming
+   descriptions would therefore buy ~30 %, not 5×.
+3. **The progressive catalog is not usable here.** REA can advertise 5 tools plus `discover_tools`
+   (`REA_MCP_TOOL_CATALOG_PROFILE=hot-cold`) for 1 678 tokens — measured on `gemma4`, an 81 % cut.
+   But `llama-server` ignores `notifications/tools/list_changed` and respawns REA per call, so a
+   discovered tool never becomes callable: after a real `discover_tools` call, `GET /tools` still
+   returned 5. It is only useful for chats that need nothing beyond open/session/evidence.
+
 They show up as `rea_*` on `GET /tools` and in the Web UI's tool picker, and the model calls them
 like any other tool. `POST /tools` is the endpoint the UI uses to run one; that is also the
 quickest way to check the chain by hand:
@@ -852,15 +883,21 @@ Automation cannot see this app's controls, so those scripts use `EnumChildWindow
 The `Ctx` field in `llm-up.ps1` is now the **largest context the model actually loads** on this
 card, found by trial load — not by arithmetic:
 
-| preset | Ctx | trained for | generation | cost vs 16k |
+| preset | Ctx | trained for | generation | cost vs the window it had |
 |---|---|---|---|---|
 | `gemma4` | 131072 | 131072 | 74.1 t/s | −4 % (was 32k) |
 | `flint` | 49152 | 262144 | 29.8 t/s | none |
 | `coder` | 32768 | 32768 | 50.3 t/s | −4 % |
-| `coder36` | 32768 | 262144 | 44.4 t/s | −1 % (45.0 at 16k); 34816 fails its first completion |
+| `coder36` | 49152 | 262144 | 32.6 t/s | **+12 %** against 32768 (A/B, 2026-11-13); n-cpu-moe 29, 27 is a CUDA OOM |
 | `gptoss` | 24576 | 131072 | 30.8 t/s | −10 % |
-| `qwen36` | 20480 | 262144 | 34.0 t/s | −13 % |
+| `qwen36` | 40960 | 262144 | 35.3 t/s | **+21 %** against 20480 (A/B, 2026-11-13); n-cpu-moe 31, 32 crashed once |
 | `qwen3` | 16384 | 40960 | 59.0 t/s | — (20480 will not load) |
+
+The last two rows exist because of §11: a 39-tool catalog costs 12 402 tokens, which was 61 % of
+`qwen36`'s 20 480 window and 38 % of `coder36`'s 32 768. Doubling the windows takes that to 30 % and
+25 % and costs nothing measurable — `bin\llm-window-ab.ps1` alternates the two configurations
+(`-ACtx/-ACpuMoe` vs `-BCtx/-BCpuMoe`), discards a warm-up generation, and reports medians, because
+single-shot sweeps on this laptop disagree with themselves by 30 %.
 
 To move a value: edit `Ctx` for that row, then
 ```powershell

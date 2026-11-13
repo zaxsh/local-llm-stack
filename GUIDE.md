@@ -123,7 +123,8 @@ No number in this repository came from a spec sheet or an estimate. The protocol
 2. **Context ceiling** — `llm-maxctx.ps1` loads at 8192 and 16384, reads free VRAM at both to get
    bytes of KV per token, then *tries* the resulting ceiling: the model must load **and complete a
    300-token request**. A model that loads but cannot finish a generation is reported as not
-   working — that is exactly how qwen36 lost 24576 and had to be set to 20480.
+   working — that is exactly how qwen36 lost 24576 and had to be set to 20480 (it now serves 40960 at
+   `--n-cpu-moe 31`, widened once the tool catalog proved to be the real user of its window).
 3. **Speed** — tokens/s from the server's own `--metrics` on that same 250–300 token generation,
    with `-fa on -ctk f16 -ctv f16`, `-ngl 99`, `-t/-tb` at 16 or 20.
 4. **Capability** - `llm-eval.ps1` runs 36 items over eight categories and grades every one by program
@@ -163,8 +164,13 @@ Two more rules that the capability run made obvious, and they apply to every mea
 | `qwen3` | Qwen3-8B Q4_K_M | 4.68 GB | 16384 (20480 OOM) | 59.0 | 8081 | 0 | yes |
 | `coder` | Qwen2.5-Coder-7B Q4_K_M | 4.36 GB | 32768 | 50.3 | 8081 | 0 | **no** |
 | `gptoss` | gpt-oss-20b MXFP4 | 11.28 GB | 24576 (32768 OOM) | 30.8 | 8082 | 14 | **no** |
-| `qwen36` | Qwen3.6-35B-A3B-MTP UD-Q4_K_S | 19.92 GB | 20480 (24576 loads, cannot finish) | 34.0 | 8084 | 30 | yes |
-| `coder36` | Qwen3.6-27B-A3B-Coder Q4_K_M | 14.95 GB | 32768 (34816 fails) | 44.4 | 8085 | 26 | yes |
+| `qwen36` | Qwen3.6-35B-A3B-MTP UD-Q4_K_S | 19.92 GB | 40960 | 35.3 | 8084 | 31 | yes |
+| `coder36` | Qwen3.6-27B-A3B-Coder Q4_K_M | 14.95 GB | 49152 | 32.6 | 8085 | 29 | yes |
+
+Both Qwen3.6 windows were widened on 2026-11-13 (20480 → 40960, 32768 → 49152) once the tool catalog
+turned out to eat 61 % and 38 % of them; the speed column is the A/B median from
+`bin\llm-window-ab.ps1`, not a single-shot sweep. At 49152 the `coder36` floor moved: 27 is a CUDA
+OOM, 28 loads, 29 is what the registry ships.
 
 `coder36` was finished on 2026-11-12; §7 is the record of how, including the two tools it exposed.
 It is the fastest model here that still handles 32k of context, and the only one whose file is
@@ -203,6 +209,7 @@ attempt was reused (`-C -`), not re-downloaded.
 | `--n-cpu-moe` floor at 16k | 28 → 33.9 t/s, **26 → 45.0 t/s**, 24 → real CUDA OOM (`failed to allocate CUDA0 buffer of size 360583296`) |
 | context ceiling | `llm-maxctx` *extrapolated* 28672; `llm-ctxgrow` trial-loaded **32768** (34816 fails its first completion) |
 | re-checked at 32768 | 26 → **44.4 t/s**, 28 → 43.6, 30 → 35.2 — the floor does not move when the context grows |
+| re-checked at 49152 (2026-11-13) | 27 → CUDA OOM, 28 → 33.2, 29 → 39.7 t/s single-shot; the A/B median is **32.6**. Here the floor *did* move: the window doubled, so two more layers had to leave the card |
 | tool calls | native `tool_calls`, verified with a real `get_weather` request |
 | VRAM at 32k | 7.38 GB of 7.96 GiB, load 12.2 s, 49 °C |
 
@@ -315,6 +322,21 @@ Traps worth knowing, all three found the hard way:
 - **`Mcp` sits *after* `Note` in the registry line, on purpose.** Every generator matches the entry
   with one regex ending `(?:;\s*Note\s*=\s*'[^']*')?(?:;\s*Mcp\s*=\s*'([^']*)')?`; inserting a field
   between `Threads` and `Note` breaks the capture silently and the presets lose the flag.
+- **Budget the catalog by the tool, not by the family.** Measured 2026-11-13: 318 prompt tokens per
+  Qwen tool, 221 per Gemma tool, so the 39-tool default is 12 402 / 8 604 and a hand-picked core of
+  eight is ~2 500. The Web UI's picker is per chat and sends only what is ticked — that is the free
+  lever, and it is the one to reach for before changing a window.
+- **`REA_MCP_TOOL_CATALOG_PROFILE=hot-cold` does not work with this client.** It advertises five
+  tools (binary_session, open_binary, close_binary, get_evidence_bundle, discover_tools) for 1 678
+  tokens — an 81 % cut — but `llama-server` ignores `notifications/tools/list_changed` and respawns
+  REA per call, so a discovered tool never becomes callable. Verified on `gemma4` 2026-11-13: the
+  model called `discover_tools` correctly and `GET /tools` still returned five. Do not ship it as a
+  context saving; it only fits chats that need nothing beyond open/session/evidence.
+- **A wider window is not automatically slower.** `bin\llm-window-ab.ps1` alternates the two
+  configurations (`-ACtx/-ACpuMoe` vs `-BCtx/-BCpuMoe`) so thermal drift lands on both arms, warms
+  the card with a discarded generation, and reports medians. Single-shot sweeps on this laptop
+  disagree with themselves by 30 %: the same 20 480 configuration measured 34.6 and 23.5 t/s in
+  consecutive rounds.
 
 ## 9. Adding the eighth model (the recipe, generalised)
 
@@ -413,7 +435,7 @@ Each of these cost real time. Do not rediscover them.
 
 ## 11. House rules (how this repository is written)
 
-- **Numbers over adjectives.** Not "fast" — 34.0 t/s at 20480 context on this laptop.
+- **Numbers over adjectives.** Not "fast" — 35.3 t/s at 40960 context on this laptop.
 - **No claim without the command that produced it.** If you cannot paste the command and its output,
   it does not go in a table.
 - **Provisional must say provisional.** A placeholder is allowed only with `PROVISIONAL` in the

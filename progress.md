@@ -582,15 +582,66 @@ coder36 all 255    85 098 / 32 768  -> reproduce the user's error, then fix it
 
 ---
 
+## Phase 9 (2026-11-13 23:40 → 2026-11-14 00:30) — the window was too small for the catalog
+
+Phase 8b cut the catalog from 85 098 tokens to 12 402 and called it fixed. It was not: the next
+complaint was that the prefill still eats the window, and the arithmetic agrees — 12 402 is **61 %**
+of `qwen36`'s 20 480 and 38 % of `coder36`'s 32 768. With no tool selected the same request is 26
+tokens, so nothing leaks; the window is simply spent at 318 tokens per Qwen tool.
+
+**Three dead ends, each measured rather than argued**
+
+| idea | what happened |
+|---|---|
+| advertise fewer tools (`REA_MCP_TOOL_CATALOG_PROFILE=hot-cold`) | 5 tools, **1 678** tokens on `gemma4` (−81 %). The model called `discover_tools` correctly, and `GET /tools` still returned 5: `llama-server` ignores `notifications/tools/list_changed` and respawns REA per call, so cold tools never become callable. |
+| pick individual tools | REA exposes families only. `session` (24) cannot analyze without `enhanced` (15), `enhanced` cannot open a target without `session`, `direct` has neither. 39 is the floor. |
+| trim the schemas | `outputSchema`s are **91 %** of the 637 KB the 39 tools weigh, and `llama-server` never sends them. What is sent is name + description + input schema, so deleting every description buys ~30 %, not 5×. |
+
+**What was changed: the window, because that is the cheap end**
+
+The first attempt used `llm-ncmoe-sweep.ps1` and produced numbers that contradicted themselves —
+the same 20 480 configuration measured 34.6 t/s and then 23.5 t/s in consecutive rounds, and a
+40 960 one measured both 41.2 and 26.7. The cause is the card, not the flag: the SM clock idles at
+~1600 MHz and takes a few seconds of real work to reach ~2600, so whichever arm runs first loses.
+
+`bin\llm-window-ab.ps1` fixes the measurement instead of the hardware: it alternates A/B/A/B, throws
+away a warm-up generation per arm, reads `n_ctx` back from `/props` to prove the window really is
+what was asked, and reports medians. Both Qwen3.6 windows were then doubled:
+
+| preset | was | now | t/s before → after | catalog share |
+|---|---|--:|---|--:|
+| `qwen36` | 20480 / ncmoe 30 | **40960 / ncmoe 31** | 29.1 → **35.3** (+21 %) | 61 % → **30 %** |
+| `coder36` | 32768 / ncmoe 26 | **49152 / ncmoe 29** | 29.2 → **32.6** (+12 %) | 38 % → **25 %** |
+
+The floors moved with the windows (`coder36` 27 is a CUDA OOM at 49 152, `qwen36` 32 crashed once at
+40 960), which is why the registry keeps the value that loaded **4/4**, not the lowest that loaded
+once. Note the absolute figures: the *old* settings measured 29.1 and 29.2 on the same afternoon, so
+this card was running ~30 % below its best-day clocks — the comparison is same-day, and it says the
+wider window is free rather than that the model became faster.
+
+**Verified end to end**
+
+```
+qwen36  39 tools  12 504 / 40 960  (28 436 left, 30 %)  rea_binary_session({"detail":"summary"})  3.3 s
+selftest   PASS 10 checks
+```
+
+**What a reader should do with this**: select the seven or eight tools the task needs in the Web UI
+picker (~2 500 tokens) and let the window cover the rest. The catalog is per chat, not per preset.
+
+---
+
 ## How to verify any of this
 
 ```powershell
 cd C:\Users\fih\llm
-.\bin\llm-selftest.ps1                 # 6 checks, including the capability suite
+.\bin\llm-selftest.ps1                 # 10 checks, including the capability suite
 .\bin\llm-verify-bundle.ps1            # every preset: load, answer, tool call, stop
 .\bin\llm-eval.ps1 -Report             # re-aggregate the capability results, run nothing
 .\bin\llm-eval.ps1 -Models gemma4      # re-measure one model from scratch (~6 min)
 .\bin\llm-ncmoe-sweep.ps1 -Model .\models\<file>.gguf -Values '26 28 30' -Ctx 32768
+.\bin\llm-window-ab.ps1 -Model .\models\<file>.gguf -ACtx 20480 -ACpuMoe 30 -BCtx 40960 -BCpuMoe 31
+.\bin\llm-mcptest.ps1 -Model qwen36    # what the catalog costs in that preset's window, then a real call
 ```
 
 Every raw number is in `results\` here and in `bench\` in the repository. Nothing in the documents is

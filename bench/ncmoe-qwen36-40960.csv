@@ -1,0 +1,4 @@
+value,tps,tokens,load_s,status
+31,41.2,250,25.4,ok
+32,0,0,10.2,crashed
+33,37.9,250,21.6,ok
