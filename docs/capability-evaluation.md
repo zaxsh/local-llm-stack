@@ -129,6 +129,7 @@ the interval below before believing a gap.
 | **coder36** | **85.4** | 5/6 | 5/5 | 2/4 | 5/6 | 3/3 | 2/3 | 3/3 | 6/6 | 5 |
 | **qwen36** | **78.1** | 6/6 | 5/5 | 1/4 | 2/6 | 3/3 | 2/3 | 3/3 | 6/6 | 8 |
 | **gptoss** | **67.7** | 6/6 | 5/5 | 1/4 | 1/6 | 3/3 | 3/3 | 0/3 | 6/6 | 5 |
+| **dsv2** | **17.7** | 1/6 | 0/5 | 1/4 | 1/6 | 2/3 | 0/3 | 0/3 | 1/6 | 0 |
 
 ### The profile, in words
 
@@ -139,6 +140,7 @@ the interval below before believing a gap.
 - **coder36** — clean sweep in `json`, `knowledge`, `logic`, `tools`; loses points in `code`, `needle`; ran out of its token budget on 5 item(s), so its row is a lower bound; 2 answer(s) could not be parsed out of the reply.
 - **qwen36** — clean sweep in `json`, `knowledge`, `logic`, `math`, `tools`; loses points in `code`, `instr`; ran out of its token budget on 8 item(s), so its row is a lower bound; 1 answer(s) could not be parsed out of the reply.
 - **gptoss** — clean sweep in `json`, `knowledge`, `logic`, `math`, `needle`; loses points in `tools`, `instr`; ran out of its token budget on 5 item(s), so its row is a lower bound.
+- **dsv2** — added 2026-11-14 and measured twice, on `q8_0` and on `f16`; the only category above half is `json`. It is not a truncated-reply story: nothing hit the ceiling, and the same wrong answers appear on both cache types. See §14 of the README.
 
 ### Who wins each category
 
@@ -160,7 +162,8 @@ Two numbers in that table need defending before anything is read into them.
 they answer were being cut off mid-thought, and a cut-off reply scores as a wrong answer. So every
 category that showed truncation — `code`, `json`, `needle`, `tools` — was re-run for **all seven
 models** at three times the budget, and `logic`/`knowledge` were re-run after the choice grader learned
-to accept an option's text as well as its letter. The final column counts the items that still hit the
+to accept an option's text as well as its letter. `dsv2` arrived after that protocol settled and ran at
+its base budgets once, with no ceiling hits. The final column counts the items that still hit the
 ceiling; a model with a non-zero count is a lower bound, not a measurement.
 
 **The macro column** is the unweighted mean of the eight category rates. It exists to order the rows.
@@ -172,7 +175,8 @@ It is not a score, and a 2-point gap in it is noise (§4).
 
 Rank correlation between tokens/s and the macro column across these seven models is **0.2**, which at
 n = 7 is indistinguishable from zero. The slowest model in the project (flint, 29.8 t/s) scored 100; the
-fastest (gemma4, 74.5 t/s) scored 97.9; the second slowest (gpt-oss, 30.8 t/s) scored 67.7.
+fastest (gemma4, 74.5 t/s) scored 97.9; the second slowest (gpt-oss, 30.8 t/s) scored 67.7. `dsv2`,
+added on 2026-11-14, is 65.1 t/s and 17.7 — a third point against any trade-off.
 
 That is not an accident of this table. Speed on this machine is decided by **bytes read per token** —
 weights that fit in VRAM are fast, weights streamed from DDR5 are not — while capability is decided by
@@ -247,7 +251,7 @@ Because on an 8 GB laptop the models that fit in VRAM answer in a couple of hund
 sometimes never arrive — so for short, format-sensitive work the 4B is the better tool, and the 40B is
 the better tool for anything that needs a long context or a hard single answer.
 
-### 7.7 Five of the seven call tools natively; one only writes JSON; one cannot
+### 7.7 Five of the eight call tools natively; one only writes JSON; two cannot
 
 The battery scores `tools` as pass/fail on the call itself, which hides *how* the call arrived.
 `bin/llm-toolmode.ps1` asks one question that needs a tool and records `finish_reason` plus whether the
@@ -262,6 +266,7 @@ reply carried a real `tool_calls` block:
 | qwen36 | `tool_calls` | **yes** | `get_weather({"city":"Ankara"})` |
 | coder | `stop` | no | `{"name": "get_weather", "arguments": {...}}` in the text |
 | gpt-oss | `length` | no | 1,500 tokens of narration, never a call |
+| dsv2 | — | no | the chat template has no tool block at all; asked anyway on 2026-11-14 and it answered in prose |
 
 The distinction matters for anything that drives a model in a loop: a **native** call is structured
 output the client can dispatch without parsing prose, and `coder`'s text JSON has to be fished out and
