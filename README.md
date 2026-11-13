@@ -899,6 +899,11 @@ The last two rows exist because of §11: a 39-tool catalog costs 12 402 tokens, 
 (`-ACtx/-ACpuMoe` vs `-BCtx/-BCpuMoe`), discards a warm-up generation, and reports medians, because
 single-shot sweeps on this laptop disagree with themselves by 30 %.
 
+The table is a best-day record, so it mixes dates. `bin\llm-verify-bundle.ps1` is the one thing that
+sees all seven under identical conditions — cold start, 300 tokens, ramp included — and on
+2026-11-14 00:25 it read coder 61.2, coder36 34.1, flint 25.1, gemma4 69.9, gptoss 20.0, qwen3 44.8,
+qwen36 27.9 t/s. Every one is below its row above; that is the card on that night, not the models.
+
 To move a value: edit `Ctx` for that row, then
 ```powershell
 .\llm-desktop.ps1 -SkipBinaries   # regenerates presets\*.cmd + START HERE.cmd

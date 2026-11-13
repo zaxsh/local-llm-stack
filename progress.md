@@ -624,7 +624,13 @@ wider window is free rather than that the model became faster.
 ```
 qwen36  39 tools  12 504 / 40 960  (28 436 left, 30 %)  rea_binary_session({"detail":"summary"})  3.3 s
 selftest   PASS 10 checks
+bundle     7/7 presets load, answer and release the card with the new flags
 ```
+
+The bundle run is also the honest anchor for every other number here: seven presets in one session,
+cold start, 300 tokens — coder 61.2, coder36 34.1, flint 25.1, gemma4 69.9, gptoss 20.0, qwen3 44.8,
+qwen36 27.9 t/s. All of them sit below their best-day figures, which is what a card 30 % down looks
+like, and the reason the new rows are quoted as a same-day A/B instead of as absolutes.
 
 **What a reader should do with this**: select the seven or eight tools the task needs in the Web UI
 picker (~2 500 tokens) and let the window cover the rest. The catalog is per chat, not per preset.
