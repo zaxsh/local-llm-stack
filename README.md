@@ -80,7 +80,7 @@ Prefer to drive it by hand?
 |---|---|
 | `get-started.ps1` | clone to running model, in one command |
 | `GUIDE.md` | **for an agent picking this up cold**: the method, the current state, the traps, what to do next |
-| `bin\` | 28 scripts: registry, fetcher, bundle builder, launcher builder, benchmarks, the capability battery, self-test, agent connectors |
+| `bin\` | 32 scripts: registry, fetcher, bundle builder, launcher builder, benchmarks, the capability battery, self-test, agent connectors |
 | `mcp\` | `rea-mcp.json` — the MCP server definition `llama-server` reads from `--mcp-servers-config`, written by `bin\llm-mcp.ps1` |
 | `models.manifest.json` | the catalogue: repo, file, exact size, sha256 per model |
 | `presets\` | the tuned flags for all eight models, readable without running anything |
